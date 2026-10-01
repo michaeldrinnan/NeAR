@@ -30,6 +30,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // Opening the manual is a page navigation; don't answer it with the app shell.
+        navigateFallbackDenylist: [/\/manual\//, /\.pdf$/i],
       },
     }),
   ],
