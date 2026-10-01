@@ -45,8 +45,24 @@ test('a demo session with the example files saves the expected ranks', async ({ 
     const t = (await tile.boundingBox())!;
     const box = (await rated.boundingBox())!;
     await drag(page, { x: t.x + t.width / 2, y: t.y + 20 }, { x: box.x + box.width - 20, y: box.y + box.height - 15 });
+    await page.waitForTimeout(400); // let the slide and settle animations finish
   }
   await expect(page.locator('.count')).toHaveText('0 of 8 left to rate');
+
+  // Swapping: dragging a rated sample over its neighbour moves it past, and dragging it back restores the order.
+  const ratedIds = () => rated.locator('.tile').evaluateAll((ts) => ts.map((t) => (t as HTMLElement).dataset.id));
+  const grip = async (name: string) => {
+    const b = (await page.locator(`[data-id="s:${name}.wav"]`).boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + 20 };
+  };
+  const [first, second] = bestFirst;
+  await drag(page, await grip(first), await grip(second));
+  await page.waitForTimeout(400);
+  expect((await ratedIds()).slice(5, 7)).toEqual([`s:${second}.wav`, `s:${first}.wav`]);
+  await drag(page, await grip(first), await grip(second));
+  await page.waitForTimeout(400);
+  expect((await ratedIds()).slice(5, 7)).toEqual([`s:${first}.wav`, `s:${second}.wav`]);
+  await expect(page.locator('.drag-avatar')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Finished rating' }).click();
   await page.getByRole('button', { name: 'Yes' }).click();

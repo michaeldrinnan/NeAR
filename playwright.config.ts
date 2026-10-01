@@ -11,6 +11,11 @@ export default defineConfig({
     channel: 'chrome',
     serviceWorkers: 'block',
   },
+  // Run once with animations and once with the 'reduce motion' setting.
+  projects: [
+    { name: 'animated' },
+    { name: 'reduced-motion', use: { reducedMotion: 'reduce' } },
+  ],
   webServer: {
     command: 'npm run preview -- --port 4174 --strictPort',
     url: 'http://localhost:4174/',

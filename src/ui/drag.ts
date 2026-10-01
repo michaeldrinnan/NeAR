@@ -5,10 +5,32 @@
  *    (Control.SetChildIndex semantics, so the tiles visibly make room);
  *  - entering the empty part of a box moves the tile to the end of that box;
  *  - reference tiles (.ref) never move.
+ *
+ * Rearrangements are animated (FLIP: tiles slide from where they were to
+ * where they now belong) unless the user has asked for reduced motion.
  */
+
+const SLIDE_MS = 200;
+const SETTLE_MS = 150;
+const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** A tile's resting place, ignoring any slide animation in progress. */
+function layoutRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const t = getComputedStyle(el).transform;
+  if (!t || t === 'none') return r;
+  const m = new DOMMatrixReadOnly(t);
+  return new DOMRect(r.x - m.m41, r.y - m.m42, r.width, r.height);
+}
+
+const inside = (r: DOMRect, x: number, y: number) => x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+
 export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void): () => void {
   let dragged: HTMLElement | null = null;
   let avatar: HTMLElement | null = null;
+  let settling: Animation | null = null;
   let startX = 0;
   let startY = 0;
   let grabX = 0;
@@ -16,11 +38,31 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
   let started = false;
   let lastHover: Element | null = null;
 
+  const tiles = () => boxes.flatMap((b) => [...b.querySelectorAll<HTMLElement>(':scope > .tile')]);
+
+  /** Runs a DOM rearrangement and slides every tile from its old place to its new one. */
+  function flip(mutate: () => void) {
+    if (reducedMotion()) return mutate();
+    const all = tiles();
+    const before = new Map(all.map((t) => [t, t.getBoundingClientRect()])); // where they are seen now
+    mutate();
+    for (const t of all) {
+      t.getAnimations().forEach((a) => a.cancel());
+      const from = before.get(t)!;
+      const to = t.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+      t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: SLIDE_MS, easing: EASE });
+    }
+  }
+
   function onDown(e: PointerEvent) {
     if (e.button !== 0 || dragged) return;
     const target = e.target as Element;
     const tile = target.closest<HTMLElement>('.tile');
     if (!tile || tile.classList.contains('ref') || target.closest('.play')) return;
+    settling?.finish();
     dragged = tile;
     started = false;
     startX = e.clientX;
@@ -45,6 +87,13 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
     document.body.append(avatar);
   }
 
+  /** What the pointer is over, judged by resting positions so sliding tiles can't cause flicker. */
+  function hoverAt(x: number, y: number): { tile: HTMLElement | null; box: HTMLElement | null } {
+    const box = boxes.find((b) => inside(b.getBoundingClientRect(), x, y)) ?? null;
+    const tile = box ? tiles().find((t) => t.parentElement === box && inside(layoutRect(t), x, y)) ?? null : null;
+    return { tile, box };
+  }
+
   function onMove(e: PointerEvent) {
     if (!dragged) return;
     if (!started) {
@@ -53,20 +102,23 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
     }
     avatar!.style.transform = `translate(${e.clientX - grabX}px, ${e.clientY - grabY}px)`;
 
-    const under = document.elementFromPoint(e.clientX, e.clientY);
-    const tile = under?.closest<HTMLElement>('.tile') ?? null;
-    const box = under?.closest<HTMLElement>('.box') ?? null;
+    const { tile, box } = hoverAt(e.clientX, e.clientY);
     const hover = tile ?? box;
     if (hover === lastHover) return; // act on "enter" only, like DragEnter
     lastHover = hover;
-    if (!hover || hover === dragged || !boxes.includes(box!)) return;
+    if (!hover || hover === dragged || !box) return;
 
+    const d = dragged;
     if (tile) {
-      if (tile.parentElement !== dragged.parentElement) tile.before(dragged);
-      else if (tile.compareDocumentPosition(dragged) & Node.DOCUMENT_POSITION_PRECEDING) tile.after(dragged);
-      else tile.before(dragged);
-    } else if (dragged.parentElement !== box) {
-      box!.append(dragged);
+      flip(() => {
+        if (tile.parentElement !== d.parentElement) tile.before(d);
+        else if (tile.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_PRECEDING) tile.after(d);
+        else tile.before(d);
+      });
+    } else if (d.parentElement !== box) {
+      flip(() => box.append(d));
+    } else {
+      return;
     }
     onChange();
   }
@@ -76,14 +128,39 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
     document.removeEventListener('pointercancel', onUp);
-    dragged.classList.remove('moving');
-    avatar?.remove();
-    avatar = null;
+    const d = dragged;
+    const a = avatar;
     dragged = null;
+    avatar = null;
     lastHover = null;
-    if (started) onChange();
+    if (!started) return;
+    onChange();
+
+    // Let the floating copy settle into the tile's slot before revealing the tile.
+    if (!a || reducedMotion()) {
+      a?.remove();
+      d.classList.remove('moving');
+      return;
+    }
+    const to = layoutRect(d);
+    d.style.visibility = 'hidden';
+    settling = a.animate([{ transform: a.style.transform }, { transform: `translate(${to.left}px, ${to.top}px)` }], {
+      duration: SETTLE_MS,
+      easing: EASE,
+    });
+    const done = () => {
+      a.remove();
+      d.style.visibility = '';
+      d.classList.remove('moving');
+      settling = null;
+    };
+    settling.onfinish = done;
+    settling.oncancel = done;
   }
 
   boxes.forEach((b) => b.addEventListener('pointerdown', onDown));
-  return () => boxes.forEach((b) => b.removeEventListener('pointerdown', onDown));
+  return () => {
+    settling?.finish();
+    boxes.forEach((b) => b.removeEventListener('pointerdown', onDown));
+  };
 }
