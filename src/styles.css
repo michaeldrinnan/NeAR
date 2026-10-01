@@ -107,11 +107,13 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .tone-teal   { --tone: #1f9e8f; --tone-bg: #e5f6f3; --tone-text: #137366; }
 .tone-purple { --tone: #8b55d6; --tone-bg: #f2ecfc; --tone-text: #6533a8; }
 .tone-amber  { --tone: #d98a12; --tone-bg: #fdf3e1; --tone-text: #9a5f05; }
+.tone-rose   { --tone: #d6457a; --tone-bg: #fdebf1; --tone-text: #a52357; }
 @media (prefers-color-scheme: dark) {
   .tone-blue   { --tone: #4d8af0; --tone-bg: #14213b; --tone-text: #9cc0ff; }
   .tone-teal   { --tone: #2fbfac; --tone-bg: #0f2a28; --tone-text: #84e3d5; }
   .tone-purple { --tone: #a374ec; --tone-bg: #221a36; --tone-text: #cdb0ff; }
   .tone-amber  { --tone: #eba23a; --tone-bg: #2c2210; --tone-text: #f6cf8b; }
+  .tone-rose   { --tone: #ec6a98; --tone-bg: #2e1420; --tone-text: #f7a9c6; }
 }
 .panel p { margin: 4px 0 10px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -236,11 +238,5 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   main { padding: 12px; }
 }
 
-.demo {
-  margin: 0;
-  padding: 10px 14px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-}
-.demo a { color: var(--accent); }
+.demo .row { align-items: center; }
+.demo a { color: var(--tone-text); }

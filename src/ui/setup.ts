@@ -69,8 +69,11 @@ export function showSetup(root: HTMLElement): void {
 
   root.innerHTML = `
     <form class="setup" novalidate>
-      <p class="demo">New to NeAR? <button type="button" data-demo>Try with example files</button>
-        or <a href="./examples/NeAR-examples.zip" download>download them (.zip)</a> to use from a folder.</p>
+      <fieldset class="panel tone-rose demo">
+        <legend>New to NeAR?</legend>
+        <div class="row"><button type="button" data-demo>Try with example files</button>
+          <span>or <a href="./examples/NeAR-examples.zip" download>download them (.zip)</a> to use from a folder.</span></div>
+      </fieldset>
       <fieldset class="panel tone-blue">
         <legend>Audio samples to rate</legend>
         <p>Choose the folder containing your audio files in WAV format.
