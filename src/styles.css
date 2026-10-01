@@ -239,4 +239,5 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 }
 
 .demo .row { align-items: center; }
-.demo a { color: var(--tone-text); }
+.demo a:not(.button) { color: var(--tone-text); }
+.demo .status { margin-top: 10px; }

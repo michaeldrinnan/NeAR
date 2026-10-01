@@ -72,7 +72,8 @@ export function showSetup(root: HTMLElement): void {
       <fieldset class="panel tone-rose demo">
         <legend>New to NeAR?</legend>
         <div class="row"><button type="button" data-demo>Try with example files</button>
-          <span>or <a href="./examples/NeAR-examples.zip" download>download them (.zip)</a> to use from a folder.</span></div>
+          <a class="button" href="./manual/NeAR-user-manual.pdf" target="_blank" rel="noopener">Read the user manual</a></div>
+        <p class="status">You can also <a href="./examples/NeAR-examples.zip" download>download the example files (.zip)</a> to use from a folder.</p>
       </fieldset>
       <fieldset class="panel tone-blue">
         <legend>Audio samples to rate</legend>
