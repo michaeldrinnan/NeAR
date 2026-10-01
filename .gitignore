@@ -8,3 +8,6 @@ dev-dist/
 Newcastle audio ranking test *.docx
 test-results/
 playwright-report/
+
+# Published paper (publisher copyright): cite and link by DOI instead
+docs/*Gould*.pdf

@@ -1,7 +1,7 @@
 /**
  * Tile backgrounds, ported from Subject.DrawBackgrounds() in the 2012 app.
  * Each tile gets a random two-Gaussian colour field so raters can tell the
- * samples apart; brightness shows the state (dim = unrated, mid = being
+ * samples apart; brightness shows the state (muted = unrated, mid = being
  * dragged, full = rated). References are plain cornflower blue.
  */
 
@@ -65,7 +65,7 @@ export function mixture(q: number, p: number, g0: Gaussian, g1: Gaussian): numbe
 export function makeTileImages(size = 96, random: () => number = Math.random): TileImages {
   const g0 = randomGaussian(random);
   const g1 = randomGaussian(random);
-  const sats = [0.25, 0.666, 1.0];
+  const sats = [0.45, 0.72, 1.0]; // unrated, moving, rated (unrated was 0.25 in 2012: too dark on screen)
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
