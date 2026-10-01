@@ -9,6 +9,7 @@ export function showAbout(): void {
       <dt>Version</dt><dd>${__APP_VERSION__} (web)</dd>
       <dt>Build date</dt><dd>${__BUILD_DATE__}</dd>
       <dt>For ideas, bug reports, suggestions and updates</dt><dd><a href="https://github.com/michaeldrinnan/NeAR/issues" target="_blank" rel="noopener">github.com/michaeldrinnan/NeAR/issues</a></dd>
+      <dt>User manual</dt><dd><a href="./manual/NeAR-user-manual.pdf" target="_blank" rel="noopener">NeAR user manual (PDF)</a></dd>
       <dt>Acknowledgements (in alphabetical order)</dt>
       <dd>Meike Brockmann<br>Paul Carding<br>Jim Gould<br>Jessie Waugh</dd>
     </dl>

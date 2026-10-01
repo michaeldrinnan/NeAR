@@ -8,6 +8,12 @@ samples and drag them into rank order; each session appends one row to `NeAR.csv
 It is a static site with no server: audio never leaves the device, and after the first
 visit it works offline and can be installed as an app.
 
+## User manual
+
+- [PDF](public/manual/NeAR-user-manual.pdf), also served by the app at `manual/NeAR-user-manual.pdf`
+  and linked from its About box
+- [Word source](docs/NeAR-user-manual.docx)
+
 ## Running
 
 ```bash

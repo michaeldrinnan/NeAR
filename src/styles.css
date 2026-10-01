@@ -68,11 +68,24 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .panel {
   margin: 0;
   padding: 12px 16px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--tone, var(--border)) 45%, transparent);
+  border-left: 5px solid var(--tone, var(--border));
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--tone-bg, var(--surface));
 }
-.panel legend { padding: 0 6px; font-weight: 600; }
+.panel legend { padding: 0 6px; font-weight: 600; color: var(--tone-text, var(--text)); }
+
+/* Each start-screen panel gets its own hue, borrowed from the tile colour wheel. */
+.tone-blue   { --tone: #2f6fdb; --tone-bg: #eaf1fe; --tone-text: #1d4fa8; }
+.tone-teal   { --tone: #1f9e8f; --tone-bg: #e5f6f3; --tone-text: #137366; }
+.tone-purple { --tone: #8b55d6; --tone-bg: #f2ecfc; --tone-text: #6533a8; }
+.tone-amber  { --tone: #d98a12; --tone-bg: #fdf3e1; --tone-text: #9a5f05; }
+@media (prefers-color-scheme: dark) {
+  .tone-blue   { --tone: #4d8af0; --tone-bg: #14213b; --tone-text: #9cc0ff; }
+  .tone-teal   { --tone: #2fbfac; --tone-bg: #0f2a28; --tone-text: #84e3d5; }
+  .tone-purple { --tone: #a374ec; --tone-bg: #221a36; --tone-text: #cdb0ff; }
+  .tone-amber  { --tone: #eba23a; --tone-bg: #2c2210; --tone-text: #f6cf8b; }
+}
 .panel p { margin: 4px 0 10px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .status { color: var(--muted); margin-bottom: 0 !important; }

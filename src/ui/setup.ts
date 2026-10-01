@@ -69,7 +69,7 @@ export function showSetup(root: HTMLElement): void {
 
   root.innerHTML = `
     <form class="setup" novalidate>
-      <fieldset class="panel">
+      <fieldset class="panel tone-blue">
         <legend>Audio samples to rate</legend>
         <p>Choose the folder containing your audio files in WAV format.
           The results file <b>${CSV_FILE}</b> is kept ${canUseFolders ? 'in the same folder' : 'in this browser'}.</p>
@@ -77,7 +77,7 @@ export function showSetup(root: HTMLElement): void {
         <p class="status" data-status="samples">No folder chosen.</p>
       </fieldset>
 
-      <fieldset class="panel">
+      <fieldset class="panel tone-teal">
         <legend>Reference samples (optional)</legend>
         <label class="check"><input type="checkbox" name="useRefs">
           <span>Use reference audio files. They are displayed in alphanumeric order (0…9, A…Z) and their order
@@ -86,12 +86,12 @@ export function showSetup(root: HTMLElement): void {
         <p class="status refs-only" data-status="refs">No folder chosen.</p>
       </fieldset>
 
-      <fieldset class="panel">
+      <fieldset class="panel tone-purple">
         <legend>Rating options</legend>
         ${CHECKBOXES.map(([k, text]) => `<label class="check"><input type="checkbox" name="${k}"><span>${text}</span></label>`).join('')}
       </fieldset>
 
-      <fieldset class="panel">
+      <fieldset class="panel tone-amber">
         <legend>Rating session</legend>
         <label for="rater">Enter a name to identify this rating session. The results of all rating sessions are
           written to ${CSV_FILE}, which can be opened in Excel or any statistics package; the text you enter

@@ -3,3 +3,6 @@ dist/
 dev-dist/
 *.log
 .DS_Store
+
+# Original 2012 manual (contains personal contact details)
+Newcastle audio ranking test *.docx
