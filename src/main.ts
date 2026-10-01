@@ -44,5 +44,36 @@ window.addEventListener('appinstalled', () => {
   installPrompt = null;
 });
 
+// Safari has no install prompt, so explain the manual route instead.
+const HINT_KEY = 'near.installHintDismissed';
+const hint = document.querySelector<HTMLElement>('#install-hint')!;
+const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone;
+const ua = navigator.userAgent;
+const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isMacSafari = !isIOS && /Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(ua);
+const hintText = isIOS
+  ? 'To install NeAR as an app, tap Share, then “Add to Home Screen”.'
+  : isMacSafari
+    ? 'To install NeAR as an app, choose File › Add to Dock.'
+    : '';
+let dismissed = false;
+try {
+  dismissed = localStorage.getItem(HINT_KEY) === '1';
+} catch {
+  /* storage unavailable: show the hint */
+}
+if (hintText && !standalone && !dismissed) {
+  hint.querySelector('.hint-text')!.textContent = hintText;
+  hint.hidden = false;
+}
+hint.querySelector('.hint-close')!.addEventListener('click', () => {
+  hint.hidden = true;
+  try {
+    localStorage.setItem(HINT_KEY, '1');
+  } catch {
+    /* fine: it will show again next time */
+  }
+});
+
 document.querySelector('#about')!.addEventListener('click', showAbout);
 showSetup(document.querySelector<HTMLElement>('#app')!);
