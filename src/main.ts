@@ -63,10 +63,10 @@ try {
   /* storage unavailable: show the hint */
 }
 if (hintText && !standalone && !dismissed) {
-  hint.querySelector('.hint-text')!.textContent = hintText;
+  hint.querySelector('.banner-text')!.textContent = hintText;
   hint.hidden = false;
 }
-hint.querySelector('.hint-close')!.addEventListener('click', () => {
+hint.querySelector('.banner-close')!.addEventListener('click', () => {
   hint.hidden = true;
   try {
     localStorage.setItem(HINT_KEY, '1');

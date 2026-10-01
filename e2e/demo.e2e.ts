@@ -27,6 +27,9 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await expect(page.locator('#rater')).toHaveValue('Demo');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
+  // Instructions are plain paragraphs (a stray flex layout once split them around the bold 'Play').
+  await expect(page.locator('.rating p.hint').first()).toHaveCSS('display', 'block');
+
   const rated = page.locator('.box.rated');
   await expect(rated.locator('.tile.ref')).toHaveCount(5);
   await expect(page.locator('.box.unrated .tile')).toHaveCount(8);
