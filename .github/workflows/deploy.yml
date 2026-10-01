@@ -27,6 +27,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npx playwright test   # uses the Google Chrome already on the runner
       - uses: actions/upload-pages-artifact@v4
         if: github.event_name != 'pull_request'
         with:

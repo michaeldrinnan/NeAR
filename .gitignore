@@ -6,3 +6,5 @@ dev-dist/
 
 # Original 2012 manual (contains personal contact details)
 Newcastle audio ranking test *.docx
+test-results/
+playwright-report/

@@ -22,10 +22,18 @@ npm run dev       # development server
 npm test          # unit tests
 npm run build     # type-check + production build into dist/
 npm run preview   # serve dist/ (service worker active)
+npm run test:e2e  # end-to-end demo session in Google Chrome (after a build)
 ```
 
 Deploy by copying `dist/` to any static HTTPS host (GitHub Pages, Netlify, a university
 web server…). The build uses relative paths, so it also works from a sub-folder.
+
+## Example files
+
+`public/examples/` holds a demo set: 8 synthetic “ah” vowels with increasing hoarseness to rate
+(`TestItems/`) and 5 references (`RefItems/`), plus `ANSWER-KEY.txt` and a zip of the lot. The app's
+*Try with example files* button loads them directly; the zip is for practising with real folders.
+Regenerate them with `npm run examples`.
 
 ## Browsers
 
@@ -67,10 +75,12 @@ RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,<sample 1>,<sample 2>,...
 - `src/ui/` — start screen and session flow (`setup.ts`), rating screen (`rating.ts`),
   drag and drop (`drag.ts`), dialogs, About box
 - `scripts/make-icons.mjs` — regenerates the PWA icons in `public/`
+- `scripts/make-examples.mjs` — regenerates the example audio, answer key and zip in `public/examples/`
+- `tests/` — unit tests (Vitest); `e2e/` — browser test of a whole session (Playwright)
 
 ## Deployment
 
-Every push to `main` runs the tests, builds, and publishes to GitHub Pages
+Every push to `main` runs the unit tests, builds, runs the end-to-end test, and publishes to GitHub Pages
 (`.github/workflows/deploy.yml`).
 
 ## Licence

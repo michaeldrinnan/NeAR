@@ -30,8 +30,16 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-        // Opening the manual is a page navigation; don't answer it with the app shell.
-        navigateFallbackDenylist: [/\/manual\//, /\.pdf$/i],
+        // Opening the manual or the examples zip is a navigation; don't answer it with the app shell.
+        navigateFallbackDenylist: [/\/manual\//, /\/examples\//, /\.pdf$/i],
+        // Example audio is fetched on demand, then kept for offline demos.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/examples/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'near-examples' },
+          },
+        ],
       },
     }),
   ],

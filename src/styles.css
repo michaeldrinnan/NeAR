@@ -235,3 +235,12 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   :root { --tile: 80px; }
   main { padding: 12px; }
 }
+
+.demo {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.demo a { color: var(--accent); }

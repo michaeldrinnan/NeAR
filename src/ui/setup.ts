@@ -69,6 +69,8 @@ export function showSetup(root: HTMLElement): void {
 
   root.innerHTML = `
     <form class="setup" novalidate>
+      <p class="demo">New to NeAR? <button type="button" data-demo>Try with example files</button>
+        or <a href="./examples/NeAR-examples.zip" download>download them (.zip)</a> to use from a folder.</p>
       <fieldset class="panel tone-blue">
         <legend>Audio samples to rate</legend>
         <p>Choose the folder containing your audio files in WAV format.
@@ -199,6 +201,26 @@ export function showSetup(root: HTMLElement): void {
       if (input.files?.length) setSource(pendingKind, sourceFromFiles(input.files, pendingKind));
     });
   }
+
+  // ---- example files bundled with the app ----
+  form.querySelector<HTMLButtonElement>('[data-demo]')!.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+    try {
+      const { samples, refs } = await loadExamples();
+      setSource('samples', samples);
+      setSource('refs', refs);
+      const useRefs = q<HTMLInputElement>('input[name="useRefs"]');
+      useRefs.checked = settings.useRefs = true;
+      syncRefs();
+      if (!raterInput.value) raterInput.value = 'Demo';
+      saved.textContent = 'Example files loaded: press Start.';
+    } catch (err) {
+      await alertBox(`Couldn't load the example files. Are you offline?\n\n${(err as Error).message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // ---- browser-kept results (no folder access) ----
   form.querySelector('[data-download]')?.addEventListener('click', async () => {
@@ -369,4 +391,24 @@ async function writeResults(
       }
     }
   }
+}
+
+/** Fetches the example set from public/examples/ (see scripts/make-examples.mjs). */
+async function loadExamples(): Promise<{ samples: Source; refs: Source }> {
+  const base = new URL('./examples/', document.baseURI);
+  const get = async (path: string) => {
+    const res = await fetch(new URL(path, base));
+    if (!res.ok) throw new Error(`${path}: ${res.status} ${res.statusText}`);
+    return res;
+  };
+  const list = (await (await get('examples.json')).json()) as { samples: string[]; references: string[] };
+  const files = (paths: string[]) =>
+    Promise.all(
+      paths.map(async (p) => new File([await (await get(p)).blob()], p.split('/').pop()!, { type: 'audio/wav' })),
+    );
+  const [samples, refs] = await Promise.all([files(list.samples), files(list.references)]);
+  return {
+    samples: { ...sourceFromFiles(samples, 'samples'), label: 'Example files' },
+    refs: { ...sourceFromFiles(refs, 'refs'), label: 'Example references' },
+  };
 }

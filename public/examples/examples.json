@@ -1,0 +1,19 @@
+{
+  "samples": [
+    "TestItems/sample-A.wav",
+    "TestItems/sample-B.wav",
+    "TestItems/sample-C.wav",
+    "TestItems/sample-D.wav",
+    "TestItems/sample-E.wav",
+    "TestItems/sample-F.wav",
+    "TestItems/sample-G.wav",
+    "TestItems/sample-H.wav"
+  ],
+  "references": [
+    "RefItems/ref-1.wav",
+    "RefItems/ref-2.wav",
+    "RefItems/ref-3.wav",
+    "RefItems/ref-4.wav",
+    "RefItems/ref-5.wav"
+  ]
+}
