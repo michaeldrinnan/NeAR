@@ -13,7 +13,7 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
   await page.mouse.up();
 }
 
-test('a demo session with the example files saves the expected ranks', async ({ page, request }) => {
+test('a demo session with the example files saves the expected ranks', async ({ page, request }, testInfo) => {
   const examples = (await (await request.get('examples/examples.json')).json()) as Examples;
   const key = await (await request.get('examples/ANSWER-KEY.txt')).text();
   const keyLines = key.split(/\r?\n/);
@@ -25,6 +25,9 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await expect(page.locator('[data-status="samples"]')).toHaveText('Rating 8 WAV files in “Example files”.');
   await expect(page.locator('[data-status="refs"]')).toHaveText('Using 5 WAV files as reference in “Example references”.');
   await expect(page.locator('#rater')).toHaveValue('Demo');
+  const animate = page.locator('input[name="animate"]');
+  await expect(animate).toBeChecked(); // on by default
+  if (testInfo.project.name === 'not-animated') await animate.uncheck();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
   // Instructions are plain paragraphs (a stray flex layout once split them around the bold 'Play').

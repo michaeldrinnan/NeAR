@@ -25,6 +25,7 @@ const defaults: Settings = {
   names: false,
   showCount: false,
   canLeave: false,
+  animate: true,
   useRefs: false,
 };
 
@@ -50,6 +51,7 @@ const CHECKBOXES: [keyof RatingOptions, string][] = [
   ['names', 'Label each audio sample with its file name. This is probably not what you want.'],
   ['showCount', 'Show the number of times each sample has been played on its PLAY button.'],
   ['canLeave', 'Allow the rater to leave some audio samples unrated.'],
+  ['animate', 'Animate the samples as they are dragged and dropped. Untick if movement on screen is uncomfortable.'],
 ];
 
 const pickButtons = (kind: SourceKind) =>

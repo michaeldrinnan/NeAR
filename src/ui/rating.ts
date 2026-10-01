@@ -10,6 +10,7 @@ export interface RatingOptions {
   names: boolean;
   showCount: boolean;
   canLeave: boolean;
+  animate: boolean;
 }
 
 /**
@@ -121,7 +122,7 @@ export function runRating(
   };
   updateCount();
 
-  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount);
+  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, opts.animate);
 
   const warnOnLeave = (e: BeforeUnloadEvent) => e.preventDefault();
   window.addEventListener('beforeunload', warnOnLeave);

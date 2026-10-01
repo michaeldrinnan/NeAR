@@ -7,14 +7,12 @@
  *  - reference tiles (.ref) never move.
  *
  * Rearrangements are animated (FLIP: tiles slide from where they were to
- * where they now belong) unless the user has asked for reduced motion.
+ * where they now belong) when the 'Animate' rating option is ticked.
  */
 
 const SLIDE_MS = 200;
 const SETTLE_MS = 150;
 const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** A tile's resting place, ignoring any slide animation in progress. */
 function layoutRect(el: HTMLElement): DOMRect {
@@ -27,7 +25,7 @@ function layoutRect(el: HTMLElement): DOMRect {
 
 const inside = (r: DOMRect, x: number, y: number) => x >= r.left && x < r.right && y >= r.top && y < r.bottom;
 
-export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void): () => void {
+export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, animate = true): () => void {
   let dragged: HTMLElement | null = null;
   let avatar: HTMLElement | null = null;
   let settling: Animation | null = null;
@@ -42,7 +40,7 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
 
   /** Runs a DOM rearrangement and slides every tile from its old place to its new one. */
   function flip(mutate: () => void) {
-    if (reducedMotion()) return mutate();
+    if (!animate) return mutate();
     const all = tiles();
     const before = new Map(all.map((t) => [t, t.getBoundingClientRect()])); // where they are seen now
     mutate();
@@ -137,7 +135,7 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
     onChange();
 
     // Let the floating copy settle into the tile's slot before revealing the tile.
-    if (!a || reducedMotion()) {
+    if (!a || !animate) {
       a?.remove();
       d.classList.remove('moving');
       return;
@@ -148,7 +146,10 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
       duration: SETTLE_MS,
       easing: EASE,
     });
+    let finished = false;
     const done = () => {
+      if (finished) return;
+      finished = true;
       a.remove();
       d.style.visibility = '';
       d.classList.remove('moving');
@@ -156,6 +157,8 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void):
     };
     settling.onfinish = done;
     settling.oncancel = done;
+    // Animations pause while the page isn't being drawn (e.g. a hidden tab); never leave the tile hidden.
+    setTimeout(done, SETTLE_MS + 150);
   }
 
   boxes.forEach((b) => b.addEventListener('pointerdown', onDown));
