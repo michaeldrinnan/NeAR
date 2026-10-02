@@ -415,3 +415,55 @@ test('a study can be deleted from the chooser, with its results downloaded first
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.locator('[data-kept]')).toContainText('“Keep me”');
 });
+
+test('abandoning a Start never removes a study that already existed, even an empty one', async ({ page }) => {
+  await page.goto('/');
+  await pickFiles(page, { 'a.wav': 'AAAA' });
+  await chooseNewStudy(page, 'Existing but empty');
+
+  // Same recordings again, now with a NeAR.csv for other files: Start will ask to reset it.
+  await pickFiles(page, { 'a.wav': 'AAAA', 'NeAR.csv': 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,other.wav\r\n' });
+  await page.locator('#rater').fill('Rater');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Study', exact: true })).not.toHaveValue('new'); // the existing study is pre-selected
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.locator('dialog')).toContainText('have changed since the last session');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await page.locator('[data-study]').click();
+  await expect(page.locator('dialog option').filter({ hasText: 'Existing but empty' })).toHaveCount(1);
+});
+
+test('the demo uses its own built-in study, not a user study with the same name and recordings', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[name="canLeave"]').check();
+  await page.getByRole('button', { name: 'Try with example files' }).click();
+  await expect(page.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
+  // Make a study of one's own from the example recordings, and call it "Example files" too.
+  await chooseNewStudy(page, 'Example files');
+
+  // Loading the examples again picks NeAR's built-in study; a demo session goes there.
+  await page.getByRole('button', { name: 'Try with example files' }).click();
+  await expect(page.locator('[data-kept]')).toContainText('“Example files”');
+  await quickSession(page, 'Demo');
+
+  const studies = await page.evaluate(
+    () =>
+      new Promise<{ name: string; builtin?: string; lines: string[] | null }[]>((resolve, reject) => {
+        const open = indexedDB.open('near');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const store = open.result.transaction('kv').objectStore('kv');
+          const all = store.getAll();
+          all.onsuccess = () => resolve((all.result as { name?: string }[]).filter((v) => v && typeof v === 'object' && 'name' in v) as never);
+          all.onerror = () => reject(all.error);
+        };
+      }),
+  );
+  const builtin = studies.filter((s) => s.builtin === 'examples');
+  const own = studies.filter((s) => s.name === 'Example files' && !s.builtin);
+  expect(builtin).toHaveLength(1);
+  expect(own).toHaveLength(1);
+  expect(builtin[0].lines).toHaveLength(2); // header + the demo session
+  expect(own[0].lines).toBeNull(); // the user's own study is untouched
+});

@@ -54,6 +54,38 @@ export function kvDelete(key: string): Promise<void> {
   return run('readwrite', (s) => s.delete(key));
 }
 
+/** What an atomic update should do with the value it found. */
+export type KvChange<T> = { put: T } | { delete: true } | null;
+
+/**
+ * Reads a value and changes it (or deletes it) inside one readwrite transaction,
+ * so no other tab can commit in between. `decide` may throw to abort without
+ * changing anything. Resolves with the decision once it has been committed.
+ */
+export async function kvUpdate<T>(key: string, decide: (current: T | undefined) => KvChange<T>): Promise<KvChange<T>> {
+  const tx = (await db()).transaction(STORE, 'readwrite');
+  const store = tx.objectStore(STORE);
+  return new Promise<KvChange<T>>((resolve, reject) => {
+    let change: KvChange<T> = null;
+    let failure: unknown = null;
+    const get = store.get(key);
+    get.onsuccess = () => {
+      try {
+        change = decide(get.result as T | undefined);
+      } catch (e) {
+        failure = e;
+        tx.abort();
+        return;
+      }
+      if (change && 'put' in change) store.put(change.put, key);
+      else if (change) store.delete(key);
+    };
+    tx.oncomplete = () => resolve(change);
+    tx.onerror = () => reject(failure ?? tx.error ?? get.error);
+    tx.onabort = () => reject(failure ?? tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
+  });
+}
+
 export function kvKeys(): Promise<IDBValidKey[]> {
   return run('readonly', (s) => s.getAllKeys());
 }

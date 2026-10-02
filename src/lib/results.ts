@@ -1,5 +1,5 @@
 import { CSV_FILE, parseLines, serializeLines } from './csv';
-import { readStudy, writeStudy } from './studies';
+import { appendToStudy, readStudy, writeStudy } from './studies';
 import type { Source } from './sources';
 
 /** Where NeAR.csv lives: in the samples folder, or (without folder access) in this browser. */
@@ -12,6 +12,8 @@ export interface ResultsStore {
   write(lines: readonly string[]): Promise<void>;
   /** Browser-kept results only: what is stored for this study, ignoring any NeAR.csv found with the files. */
   readStored?(): Promise<string[] | null>;
+  /** Browser-kept results only: saves a finished session (last line) without losing rows another tab added meanwhile. */
+  append?(lines: readonly string[]): Promise<void>;
 }
 
 export function resultsFor(source: Source): ResultsStore {
@@ -57,6 +59,9 @@ function browserResults(source: Source): ResultsStore {
     },
     async write(lines) {
       await writeStudy(id, lines);
+    },
+    async append(lines) {
+      await appendToStudy(id, lines);
     },
   };
 }

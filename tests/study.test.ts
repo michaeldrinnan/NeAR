@@ -10,6 +10,14 @@ vi.mock('../src/lib/kv', () => ({
   kvKeys: async () => [...memory.keys()],
   kvGet: async (key: string) => structuredClone(memory.get(key)),
   kvSet: write,
+  kvDelete: async (key: string) => { memory.delete(key); },
+  // Same contract as kv.ts: decide on the current value, then put/delete it in one step.
+  kvUpdate: async (key: string, decide: (current: unknown) => { put: unknown } | { delete: true } | null) => {
+    const change = decide(structuredClone(memory.get(key)));
+    if (change && 'put' in change) await write(key, change.put);
+    else if (change) memory.delete(key);
+    return change;
+  },
 }));
 beforeEach(() => { memory.clear(); write.mockClear(); });
 

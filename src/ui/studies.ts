@@ -14,7 +14,10 @@ function field<T extends HTMLElement>(body: HTMLElement, title: string, control:
 }
 
 /** A content match is a suggestion only: the user must select a study explicitly. */
-export async function chooseStudy(source: Source): Promise<boolean> {
+/** What the chooser did: nothing (cancelled), selected an existing study, or created a new one. */
+export type StudyChoice = false | { created: boolean };
+
+export async function chooseStudy(source: Source): Promise<StudyChoice> {
   const [fingerprint, studies] = await Promise.all([fingerprintSource(source), listStudies()]);
   const body = document.createElement('div');
   body.className = 'study-form';
@@ -54,12 +57,12 @@ export async function chooseStudy(source: Source): Promise<boolean> {
     if (select.value === 'new') {
       if (!name.value.trim()) { await alertBox('Enter a study name.'); continue; }
       source.studyId = (await createStudy(source, name.value)).id;
-    } else {
-      const study = studies.find((s) => s.id === select.value && s.fingerprint === fingerprint);
-      if (!study) { await alertBox('Choose a study with matching recordings.'); continue; }
-      source.studyId = study.id;
+      return { created: true };
     }
-    return true;
+    const study = studies.find((s) => s.id === select.value && s.fingerprint === fingerprint);
+    if (!study) { await alertBox('Choose a study with matching recordings.'); continue; }
+    source.studyId = study.id;
+    return { created: false };
   }
 }
 

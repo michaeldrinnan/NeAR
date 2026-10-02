@@ -1,5 +1,5 @@
-import { buildHeader } from './csv';
-import { kvDelete, kvGet, kvKeys, kvSet } from './kv';
+import { buildHeader, sameLines } from './csv';
+import { kvDelete, kvGet, kvKeys, kvSet, kvUpdate } from './kv';
 import type { Source } from './sources';
 
 export interface Study {
@@ -8,6 +8,8 @@ export interface Study {
   fingerprint: string;
   created: string;
   lines: string[] | null;
+  /** Internal marker for studies NeAR creates itself; never set from anything the user types. */
+  builtin?: 'examples';
 }
 
 const key = (id: string) => `study:${id}`;
@@ -45,11 +47,16 @@ export async function readStudy(id: string): Promise<Study> {
 }
 
 /** Metadata and recovered results commit together. A failed write cannot expose a partial migration. */
-export async function createStudy(source: Source, name: string, lines: string[] | null = null): Promise<Study> {
+export async function createStudy(
+  source: Source,
+  name: string,
+  lines: string[] | null = null,
+  builtin?: Study['builtin'],
+): Promise<Study> {
   if (!name.trim()) throw new Error('Enter a study name.');
   const study: Study = {
     id: crypto.randomUUID(), name: name.trim(), fingerprint: await fingerprintSource(source),
-    created: new Date().toISOString(), lines,
+    created: new Date().toISOString(), lines, ...(builtin ? { builtin } : {}),
   };
   await kvSet(key(study.id), study);
   return study;
@@ -60,24 +67,53 @@ export function deleteStudy(id: string): Promise<void> {
   return kvDelete(key(id));
 }
 
-/** Removes a study that never received any results (created, then the session was abandoned). */
+/**
+ * Removes a study that never received any results (created, then the session was
+ * abandoned). The emptiness check and the delete share one transaction, so a save
+ * from another tab can't land in between and be deleted.
+ */
 export async function discardIfEmpty(id: string): Promise<boolean> {
-  const study = await kvGet<Study>(key(id));
-  if (!study || (study.lines && study.lines.length > 0)) return false;
-  await kvDelete(key(id));
-  return true;
+  const change = await kvUpdate<Study>(key(id), (study) =>
+    study && !(study.lines && study.lines.length > 0) ? { delete: true } : null,
+  );
+  return change !== null;
 }
 
+const missing = () => new Error('This study could not be found (was it deleted in another tab?). Choose a study again.');
+
+/** Replaces a study's results (imports, or carrying on from a folder's NeAR.csv). */
 export async function writeStudy(id: string, lines: readonly string[]): Promise<void> {
-  const study = await readStudy(id);
-  await kvSet(key(id), { ...study, lines: [...lines] });
+  await kvUpdate<Study>(key(id), (study) => {
+    if (!study) throw missing();
+    return { put: { ...study, lines: [...lines] } };
+  });
+}
+
+/**
+ * Saves a finished session. `lines` is the results file as read when the session
+ * started plus the new row at the end. Inside one transaction: if nothing changed
+ * meanwhile, store it as is; if another tab has added sessions to the same file
+ * since, append just the new row to what is there now, so neither session is lost.
+ * (If the header differs, this session deliberately started a fresh file.)
+ */
+export async function appendToStudy(id: string, lines: readonly string[]): Promise<void> {
+  const base = lines.slice(0, -1);
+  const row = lines[lines.length - 1];
+  await kvUpdate<Study>(key(id), (study) => {
+    if (!study) throw missing();
+    const now = study.lines;
+    const merged = !now || !now.length || sameLines(now, base) || now[0] !== lines[0] ? [...lines] : [...now, row];
+    return { put: { ...study, lines: merged } };
+  });
 }
 
 /** The built-in study for the bundled example files, created on first use. */
 export async function exampleStudy(source: Source): Promise<Study> {
   const fingerprint = await fingerprintSource(source);
-  const existing = (await listStudies()).find((s) => s.name === EXAMPLE_STUDY && s.fingerprint === fingerprint);
-  return existing ?? createStudy(source, EXAMPLE_STUDY);
+  // Found by NeAR's own marker, never by name, so a user study that happens to be called
+  // "Example files" and hold the same recordings is never used for demo sessions.
+  const existing = (await listStudies()).find((s) => s.builtin === 'examples' && s.fingerprint === fingerprint);
+  return existing ?? createStudy(source, EXAMPLE_STUDY, null, 'examples');
 }
 
 export const EXAMPLE_STUDY = 'Example files';

@@ -156,11 +156,14 @@ export function showSetup(root: HTMLElement): void {
       }
     }
   }
-  async function ensureStudy(src: Source): Promise<boolean> {
+  // The study created by the Start currently in progress, if any (and only if it created one).
+  let createdByStart: string | undefined;
+  async function ensureStudy(src: Source, forStart = false): Promise<boolean> {
     if (src.dir || src.studyId) return true;
     const chosen = await chooseStudy(src);
+    if (forStart && chosen && chosen.created) createdByStart = src.studyId;
     if (sources.samples === src) await showKept(src);
-    return chosen;
+    return !!chosen;
   }
   q<HTMLButtonElement>('[data-study]').addEventListener('click', () => void exclusive(async () => {
     const src = sources.samples;
@@ -354,13 +357,16 @@ ${(e as Error).message}`);
     void exclusive(async () => {
       rater = raterInput.value;
       const samples = sources.samples;
-      const hadStudy = samples?.studyId;
+      createdByStart = undefined;
       try {
         await start();
       } finally {
-        // A study created just now for a session that was then abandoned is removed again.
-        if (samples && !samples.dir && samples.studyId && samples.studyId !== hadStudy && (await discardIfEmpty(samples.studyId).catch(() => false))) {
-          samples.studyId = undefined;
+        // A study this Start created, for a session that was then abandoned, is removed again.
+        // Studies that already existed are never touched, even if they are empty.
+        const created = createdByStart;
+        createdByStart = undefined;
+        if (created && (await discardIfEmpty(created).catch(() => false))) {
+          if (samples?.studyId === created) samples.studyId = undefined;
           refreshKept();
         }
       }
@@ -393,7 +399,7 @@ ${(e as Error).message}`);
     if (rater.includes(','))
       return void alertBox('Your rating session ID contains the comma character.\nThis will be misinterpreted by programs that include Microsoft Excel, and should be removed.');
 
-    if (!await ensureStudy(samples)) return;
+    if (!await ensureStudy(samples, true)) return;
     const store = resultsFor(samples);
     const header = buildHeader(samples.items.map((s) => s.name));
 
@@ -474,7 +480,7 @@ async function writeResults(
   };
   for (;;) {
     try {
-      await store.write(lines);
+      await (store.append ? store.append(lines) : store.write(lines));
       status(`Saved to ${store.where} at ${new Date().toLocaleTimeString()}.`);
       if (store.inBrowser) {
         const key = await ask(
