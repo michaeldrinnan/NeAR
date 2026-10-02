@@ -30,8 +30,8 @@ web server…). The build uses relative paths, so it also works from a sub-folde
 
 ## Example files
 
-`public/examples/` holds a demo set: 8 synthetic “ah” vowels with increasing hoarseness to rate
-(`TestItems/`) and 5 references (`RefItems/`), plus `ANSWER-KEY.txt` and a zip of the lot. The app's
+`public/examples/` holds a demo set: 8 synthetic “ah” vowels with varying hoarseness to rate
+(`TestItems/`) and 5 references (`RefItems/`), plus a zip of the lot. The app's
 *Try with example files* button loads them directly; the zip is for practising with real folders.
 Regenerate them with `npm run examples`.
 
@@ -93,7 +93,7 @@ RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,<sample 1>,<sample 2>,...
 - `src/ui/` — start screen and session flow (`setup.ts`), rating screen (`rating.ts`),
   drag and drop (`drag.ts`), dialogs, About box
 - `scripts/make-icons.mjs` — regenerates the PWA icons in `public/`
-- `scripts/make-examples.mjs` — regenerates the example audio, answer key and zip in `public/examples/`
+- `scripts/make-examples.mjs` — regenerates the example audio and zip in `public/examples/`
 - `tests/` — unit tests (Vitest); `e2e/` — browser test of a whole session (Playwright)
 
 ## Deployment

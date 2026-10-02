@@ -15,9 +15,9 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
 
 test('a demo session with the example files saves the expected ranks', async ({ page, request }, testInfo) => {
   const examples = (await (await request.get('examples/examples.json')).json()) as Examples;
-  const key = await (await request.get('examples/ANSWER-KEY.txt')).text();
-  const keyLines = key.split(/\r?\n/);
-  const bestFirst = keyLines[keyLines.findIndex((l) => l.startsWith('Answer key')) + 1].trim().split(', ');
+  // The order this test rates the samples in: any order will do (there is no "right" order),
+  // so use one that differs from the files' own order to check the saved ranks properly.
+  const bestFirst = examples.samples.map((p) => p.split('/').pop()!.replace(/\.wav$/, '')).reverse();
   expect(bestFirst).toHaveLength(8);
 
   await page.goto('/');
@@ -114,7 +114,7 @@ test('a demo session with the example files saves the expected ranks', async ({ 
     'Example references',
     '5',
   ]);
-  // References fill ranks 1-5, so the samples follow from 6 in answer-key order.
+  // References fill ranks 1-5, so the samples follow from 6 in the order they were placed.
   const expected = names.map((n) => String(6 + bestFirst.indexOf(n.replace(/\.wav$/, ''))));
   expect(row.slice(6)).toEqual(expected);
 

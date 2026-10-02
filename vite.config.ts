@@ -36,7 +36,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.includes('/examples/'),
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst', // fresh after an update, cached for offline use
             options: { cacheName: 'near-examples' },
           },
         ],
