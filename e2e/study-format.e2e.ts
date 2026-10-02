@@ -228,7 +228,7 @@ test('a changed study is a different study with its own results; the same study 
 test('the example study offered for download is a valid study that opens with Open study file…', async ({ page }) => {
   await toRate(page);
   const download = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Download this example (.zip)' }).click();
+  await page.getByRole('button', { name: 'Download (.zip)' }).click();
   const zip = await download;
   expect(zip.suggestedFilename()).toBe('example-files.zip');
   await page.locator('input[type="file"][accept*="zip"]').setInputFiles(await zip.path());

@@ -152,12 +152,19 @@ p { margin: 0; }
 .callout { padding: 12px 14px; border: 1px dashed #4a5260; border-radius: 8px; font-size: 0.9rem; color: var(--muted); }
 
 /* ---- Rate a study ---- */
-.carry { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.carry .t { flex: 1; min-width: 0; }
-.list { display: grid; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.list .item { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--well); }
-.list .item:first-child { border-top: 0; }
-.list .item .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* Each row: text on the left; its buttons, all one size, stacked on the right. */
+.choice { display: flex; gap: 16px; align-items: center; }
+.choice > .t { flex: 1; min-width: 0; display: grid; gap: 8px; justify-items: start; overflow-wrap: anywhere; }
+.choice > .t select { width: 100%; }
+.choice > .side { flex: none; width: 12rem; display: grid; gap: 8px; }
+.choice > .side button { width: 100%; text-align: center; }
+@media (max-width: 600px) {
+  .choice { flex-wrap: wrap; }
+  .choice > .side { width: 100%; }
+}
+.list { display: grid; }
+.list .item { padding: 12px 0; border-top: 1px solid var(--border); }
+.list .item:first-child { border-top: 0; padding-top: 4px; }
 .small-btn { font-size: 0.8rem; padding: 3px 10px; }
 .panel a:not(.button) { color: var(--focus); }
 

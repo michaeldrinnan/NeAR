@@ -149,19 +149,31 @@ async function showRate(back: () => void) {
   const again = () => void showRate(back);
   const rateBack = () => go('rate');
 
+  /** A row of the Rate page: text on the left, its buttons stacked on the right, all the same size. */
+  const choice = (left: (Node | string)[], buttons: HTMLButtonElement[], className = 'choice') => {
+    for (const b of buttons) b.classList.add('primary');
+    return el('div', { className }, [el('div', { className: 't' }, left), el('div', { className: 'side' }, buttons)]);
+  };
+
   // 1. Example studies
-  const select = el('select', { id: 'example-select' });
-  const tryIt = el('button', { type: 'button', className: 'primary', textContent: 'Try it' });
-  const link = el('a', { href: './studies/example-files.zip', download: 'example-files.zip', textContent: 'Download this example (.zip)' });
+  const select = el('select', { id: 'example-select', 'aria-label': 'Example study' });
+  const tryIt = el('button', { type: 'button', textContent: 'Try it' });
+  const download = el('button', { type: 'button', textContent: 'Download (.zip)' });
+  let chosen: BuiltinStudy = BUILTIN_FALLBACK[0];
   tryIt.addEventListener('click', () => void openExample(Number(select.value) || 0, tryIt, rateBack));
+  download.addEventListener('click', () => {
+    const a = el('a', { href: `./${builtinUrl(chosen)}`, download: chosen.file });
+    document.body.append(a);
+    a.click();
+    a.remove();
+  });
   void builtinStudies().then((list) => {
     select.replaceChildren(...list.map((s, i) => new Option(s.title, String(i))));
     builtinChoice = Math.min(builtinChoice, list.length - 1);
     select.value = String(builtinChoice);
     const sync = () => {
       builtinChoice = Number(select.value);
-      link.href = `./${builtinUrl(list[builtinChoice])}`;
-      link.download = list[builtinChoice].file;
+      chosen = list[builtinChoice];
     };
     select.addEventListener('change', sync);
     sync();
@@ -169,7 +181,7 @@ async function showRate(back: () => void) {
 
   // 4. A study you were sent
   const zipInput = el('input', { type: 'file', accept: '.zip,application/zip', hidden: true });
-  const openZip = el('button', { type: 'button', className: 'primary', textContent: 'Open study file…' });
+  const openZip = el('button', { type: 'button', textContent: 'Open study file…' });
   openZip.addEventListener('click', () => {
     zipInput.value = '';
     zipInput.click();
@@ -202,9 +214,7 @@ async function showRate(back: () => void) {
 
   const panels: HTMLElement[] = [
     el('section', { className: 'panel tone-rate shade-1' }, [
-      el('h2', { textContent: 'Example studies' }),
-      el('div', { className: 'row' }, [el('label', { htmlFor: 'example-select', className: 'muted', textContent: 'Example' }), select, tryIt]),
-      el('p', { className: 'note' }, [link]),
+      choice([el('h2', { textContent: 'Example studies' }), select], [tryIt, download]),
     ]),
   ];
 
@@ -220,20 +230,19 @@ async function showRate(back: () => void) {
   };
   if (recent.length) {
     const last = recent[0];
-    const carry = el('button', { type: 'button', className: 'primary', textContent: 'Carry on' });
+    const carry = el('button', { type: 'button', textContent: 'Carry on' });
     carry.addEventListener('click', openRecent(last, carry));
     const meta = el('span', { className: 'muted', textContent: `Last used ${when(last.lastUsed)}` });
     void savedCount(last).then((t) => (meta.textContent += t));
     panels.push(
       el('section', { className: 'panel tone-rate shade-2 carry' }, [
-        el('div', { className: 't' }, [el('strong', { textContent: `Carry on with ${last.title}` }), el('br'), meta]),
-        carry,
+        choice([el('h2', { textContent: `Carry on with ${last.title}` }), meta], [carry]),
       ]),
     );
     const items = recent.map((r) => {
       const openBtn = el('button', { type: 'button', textContent: 'Open' });
       openBtn.addEventListener('click', openRecent(r, openBtn));
-      const forget = el('button', { type: 'button', className: 'small-btn', textContent: 'Remove', title: 'Remove from this list (results are kept)' });
+      const forget = el('button', { type: 'button', textContent: 'Remove', title: 'Remove from this list (results are kept)' });
       forget.addEventListener('click', async () => {
         await forgetRecent(r.identity).catch(() => {});
         again();
@@ -241,16 +250,17 @@ async function showRate(back: () => void) {
       const where = r.source.kind === 'folder' ? `folder “${r.source.dir.name}”` : r.source.kind === 'zip' ? r.source.name : 'example';
       const meta = el('span', { className: 'mono', textContent: `#${studyCode(r.identity)} · ${where} · ${when(r.lastUsed)}` });
       void savedCount(r).then((t) => (meta.textContent += t));
-      return el('div', { className: 'item' }, [el('div', { className: 't' }, [el('strong', { textContent: r.title }), el('br'), meta]), openBtn, forget]);
+      return choice([el('strong', { textContent: r.title }), meta], [openBtn, forget], 'choice item');
     });
     panels.push(el('section', { className: 'panel tone-rate shade-3' }, [el('h2', { textContent: 'Recent studies' }), el('div', { className: 'list' }, items)]));
   }
 
   panels.push(
     el('section', { className: 'panel tone-rate shade-4' }, [
-      el('h2', { textContent: 'A study you were sent' }),
-      el('p', { className: 'muted', textContent: 'A study is a .zip file, or a folder, containing the voices and the study’s settings.' }),
-      el('div', { className: 'row' }, [openZip, openFolder]),
+      choice(
+        [el('h2', { textContent: 'A study you were sent' }), el('p', { className: 'muted', textContent: 'A study is a .zip file, or a folder, containing the voices and the study’s settings.' })],
+        [openZip, openFolder],
+      ),
       zipInput,
       folderInput,
     ]),
@@ -258,4 +268,3 @@ async function showRate(back: () => void) {
 
   root.replaceChildren(page([backNav(back), el('h1', { textContent: 'Which study are you rating?' }), ...panels]));
 }
-
