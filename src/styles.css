@@ -11,7 +11,7 @@
   --control-border: #3a414c;
   --focus: #7fb3ff;
   --accent: #2b6cb0;
-  --box: #1b2029;
+  --box: #222a37;
   --tile: 96px;
   /* The four parts of NeAR, each with its own colour. */
   --rate: #2b6cb0;
@@ -216,12 +216,12 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
   align-content: flex-start;
   gap: 8px;
   min-height: calc(var(--tile) + 20px);
-  padding: 8px;
-  border: 1px solid var(--border);
+  padding: 10px;
+  border: 2px solid #56637a;
   border-radius: 8px;
   background: var(--box);
 }
-.box.rated { min-height: calc(2 * var(--tile) + 28px); }
+.box.rated { min-height: calc(2 * var(--tile) + 28px); border-color: #4f86c6; background: #1f2c40; }
 
 .tile {
   position: relative;
