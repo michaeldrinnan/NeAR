@@ -37,7 +37,7 @@ test('a demo session with the example study saves the expected ranks', async ({ 
 
   // The rating screen itself: one bar, the instructions, and the two boxes.
   await expect(page.locator('.rating > *')).toHaveCount(6); // bar, instructions, prompt, box, prompt, box
-  await expect(page.locator('.prompt')).toHaveText(['Put the BEST sample here at top left.', /^In the box below are the unrated samples/]);
+  await expect(page.locator('.prompt')).toHaveText(['Put the BEST sample here at top left. Reference samples are plain blue and cannot be moved.', /^In the box below are the unrated samples/]);
   await expect(page.getByText(/left to rate/)).toHaveCount(0);
   await expect(page.locator('.rating-instr')).toContainText('Rank them from the clearest voice');
   await expect(page.locator('#rater')).toHaveCount(0);
@@ -206,6 +206,7 @@ test('recent studies: carry on with the last one, or open any from the list', as
   await play.click();
   await expect(play).toHaveText('2');
   await expect(page.locator('.box.unrated .tile-label')).toHaveCount(0); // no number labels in this one
+  await expect(page.locator('.prompt').first()).toHaveText('Put the BEST sample here at top left.'); // no references, no note about them
   await saveAndFinish(page);
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(page.locator('.saved')).toContainText('Saved to this browser');
