@@ -232,7 +232,14 @@ export function showSetup(root: HTMLElement): void {
   form.querySelector('[data-download]')?.addEventListener('click', async () => {
     const src = sources.samples;
     if (!src) return void alertBox('Choose the samples first; results are kept per samples folder.');
-    const lines = await resultsFor(src).read();
+    let lines: string[] | null;
+    try {
+      lines = await resultsFor(src).read();
+    } catch (e) {
+      return void alertBox(`The results kept in this browser could not be read.
+
+${(e as Error).message}`);
+    }
     if (!lines) return void alertBox(`There are no results for “${src.label}” yet.`);
     downloadLines(lines, CSV_FILE);
   });
@@ -256,10 +263,21 @@ export function showSetup(root: HTMLElement): void {
   setSource('samples', sources.samples);
   setSource('refs', sources.refs);
   raterInput.value = rater;
-  form.addEventListener('submit', (e) => {
+  // One session at a time: Start stays disabled while folders, results and questions are dealt with.
+  const startBtn = q<HTMLButtonElement>('.start');
+  let starting = false;
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (starting) return;
+    starting = true;
+    startBtn.disabled = true;
     rater = raterInput.value;
-    void start();
+    try {
+      await start();
+    } finally {
+      starting = false;
+      startBtn.disabled = false; // harmless if a session has since replaced this screen
+    }
   });
 
   // ---- the session (the old BtnStart_Click) ----

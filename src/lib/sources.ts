@@ -1,6 +1,6 @@
 import { compareNtfs, isWav } from './order';
 import { CSV_FILE } from './csv';
-import { kvGet, kvSet } from './kv';
+import { kvGetQuiet, kvSet } from './kv';
 
 export interface AudioItem {
   /** Unique within a session ("s:" samples, "r:" references). */
@@ -62,7 +62,7 @@ export async function pickDirectory(kind: SourceKind): Promise<Source | null> {
 /** The folder used last time, if the browser kept it. */
 export async function rememberedDirectory(kind: SourceKind): Promise<FileSystemDirectoryHandle | undefined> {
   if (!canUseFolders) return undefined;
-  return kvGet<FileSystemDirectoryHandle>(handleKey(kind));
+  return kvGetQuiet<FileSystemDirectoryHandle>(handleKey(kind));
 }
 
 /** Re-opens a remembered folder, asking for permission if needed (needs a click). */

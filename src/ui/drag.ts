@@ -12,6 +12,8 @@
 
 const SLIDE_MS = 200;
 const SETTLE_MS = 150;
+const EDGE_PX = 70; // dragging this close to the top or bottom of the window scrolls the page
+const MAX_SCROLL_PX = 20; // per frame, at the very edge
 const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 /** A tile's resting place, ignoring any slide animation in progress. */
@@ -35,6 +37,9 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, 
   let grabY = 0;
   let started = false;
   let lastHover: Element | null = null;
+  let pointerX = 0;
+  let pointerY = 0;
+  let scrollFrame = 0;
 
   const tiles = () => boxes.flatMap((b) => [...b.querySelectorAll<HTMLElement>(':scope > .tile')]);
 
@@ -98,9 +103,36 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, 
       if (Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
       begin();
     }
-    avatar!.style.transform = `translate(${e.clientX - grabX}px, ${e.clientY - grabY}px)`;
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    avatar!.style.transform = `translate(${pointerX - grabX}px, ${pointerY - grabY}px)`;
+    hoverOver(pointerX, pointerY);
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(autoScroll);
+  }
 
-    const { tile, box } = hoverAt(e.clientX, e.clientY);
+  /**
+   * Scrolls the page while the pointer is held near the top or bottom edge, so a
+   * tile can be carried to a box that is off screen (essential with touch, where
+   * the finger that drags can't also scroll). The speed grows towards the edge.
+   */
+  function autoScroll() {
+    scrollFrame = 0;
+    if (!dragged || !started) return;
+    const h = window.innerHeight;
+    let speed = 0;
+    if (pointerY < EDGE_PX) speed = -MAX_SCROLL_PX * (1 - Math.max(pointerY, 0) / EDGE_PX);
+    else if (pointerY > h - EDGE_PX) speed = MAX_SCROLL_PX * (1 - Math.max(h - pointerY, 0) / EDGE_PX);
+    if (!speed) return;
+    const before = window.scrollY;
+    window.scrollBy(0, speed);
+    // The page moved under a stationary pointer, so what it is over may have changed.
+    if (window.scrollY !== before) hoverOver(pointerX, pointerY);
+    scrollFrame = requestAnimationFrame(autoScroll);
+  }
+
+  function hoverOver(x: number, y: number) {
+    if (!dragged) return;
+    const { tile, box } = hoverAt(x, y);
     const hover = tile ?? box;
     if (hover === lastHover) return; // act on "enter" only, like DragEnter
     lastHover = hover;
@@ -126,6 +158,8 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, 
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
     document.removeEventListener('pointercancel', onUp);
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
     const d = dragged;
     const a = avatar;
     dragged = null;

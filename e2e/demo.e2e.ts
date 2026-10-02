@@ -28,6 +28,7 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   const animate = page.locator('input[name="animate"]');
   await expect(animate).toBeChecked(); // on by default
   if (testInfo.project.name === 'not-animated') await animate.uncheck();
+  await page.locator('input[name="showCount"]').check();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
   // Instructions are plain paragraphs (a stray flex layout once split them around the bold 'Play').
@@ -41,6 +42,13 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await page.locator('.box.unrated .tile .play').first().click();
   await expect(page.locator('audio')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('dialog')).toHaveCount(0);
+  await expect(page.locator('.box.unrated .tile .play').first()).toHaveText('1');
+
+  // Play counts include the references, as in the 2012 version.
+  const refPlay = rated.locator('.tile.ref .play').first();
+  await refPlay.click();
+  await refPlay.click();
+  await expect(refPlay).toHaveText('2');
 
   // Drop each sample, best first, into the empty space after the references.
   for (const name of bestFirst) {
@@ -99,4 +107,41 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   // References fill ranks 1-5, so the samples follow from 6 in answer-key order.
   const expected = names.map((n) => String(6 + bestFirst.indexOf(n.replace(/\.wav$/, ''))));
   expect(row.slice(6)).toEqual(expected);
+
+  // Start can't be pressed again while a session is being set up: here the "already used" question is open.
+  const start = page.getByRole('button', { name: 'Start', exact: true });
+  await start.click();
+  await expect(page.locator('dialog')).toContainText('this rater ID has already been used');
+  await expect(start).toBeDisabled();
+  await page.getByRole('button', { name: 'No' }).click();
+  await expect(start).toBeEnabled();
+  await expect(page.locator('.rating')).toHaveCount(0);
+});
+
+test('dragging to the edge of the window scrolls to boxes that are off screen', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 300 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Try with example files' }).click();
+  await expect(page.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.locator('.box.unrated .tile')).toHaveCount(8);
+
+  // Scroll to the bottom; the top of the rated box is now above the window.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const rated = page.locator('.box.rated');
+  const above = (await rated.boundingBox())!;
+  expect(above.y).toBeLessThan(0);
+
+  // Pick up a sample and hold it at the top edge: the page scrolls up by itself.
+  const tile = (await page.locator('.box.unrated .tile').first().boundingBox())!;
+  await page.mouse.move(tile.x + tile.width / 2, tile.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(tile.x + tile.width / 2, 8, { steps: 10 });
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5000 }).toBe(0);
+
+  // Now the rated box is in view: drop the sample into it.
+  const box = (await rated.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 30, box.y + 40, { steps: 10 }); // empty space beside the references
+  await page.mouse.up();
+  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
 });

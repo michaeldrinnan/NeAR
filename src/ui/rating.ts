@@ -51,21 +51,25 @@ export function runRating(
 
   const urls = new Map<string, string>();
   const playing = { id: '' };
+  let playRequest = 0; // the most recent Play click wins, however long its file takes to load
 
   async function play(item: AudioItem, label: string) {
+    const request = ++playRequest;
     try {
       let url = urls.get(item.id);
       if (!url) {
-        url = URL.createObjectURL(await item.getFile());
+        const file = await item.getFile();
+        url = urls.get(item.id) ?? URL.createObjectURL(file);
         urls.set(item.id, url);
       }
+      if (request !== playRequest) return; // a later Play click has taken over
       if (playing.id === item.id) audio.currentTime = 0;
       else audio.src = url;
       playing.id = item.id;
       nowPlaying.textContent = label ? `Playing: ${label}` : 'Playing';
       await audio.play();
     } catch (e) {
-      if ((e as DOMException).name === 'AbortError') return; // superseded by another Play
+      if (request !== playRequest || (e as DOMException).name === 'AbortError') return; // superseded by another Play
       await alertBox(
         `There was a problem trying to play this file:\n  ${item.name}\n\n` +
           `Has it been moved or renamed since starting? Is it a valid WAV file?`,
@@ -97,7 +101,7 @@ export function runRating(
     let plays = 0;
     btn.addEventListener('click', () => {
       plays++;
-      if (opts.showCount && !isRef) btn.textContent = String(plays);
+      if (opts.showCount) btn.textContent = String(plays); // references are counted too, as in 2012
       void play(item, text);
     });
     tile.append(btn);
