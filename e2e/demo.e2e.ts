@@ -36,7 +36,9 @@ test('a demo session with the example study saves the expected ranks', async ({ 
   await name(page, 'Demo');
 
   // The rating screen itself: one bar, the instructions, and the two boxes.
-  await expect(page.locator('.rating > *')).toHaveCount(4);
+  await expect(page.locator('.rating > *')).toHaveCount(6); // bar, instructions, prompt, box, prompt, box
+  await expect(page.locator('.prompt')).toHaveText(['Put the BEST sample here at top left.', /^In the box below are the unrated samples/]);
+  await expect(page.getByText(/left to rate/)).toHaveCount(0);
   await expect(page.locator('.rating-instr')).toContainText('Rank them from the clearest voice');
   await expect(page.locator('#rater')).toHaveCount(0);
 
@@ -60,7 +62,7 @@ test('a demo session with the example study saves the expected ranks', async ({ 
     await drag(page, { x: t.x + t.width / 2, y: t.y + 20 }, { x: box.x + box.width - 20, y: box.y + box.height - 15 });
     await page.waitForTimeout(400); // let the slide and settle animations finish
   }
-  await expect(page.locator('.count')).toHaveText('0 of 8 left to rate');
+  await expect(page.locator('.box.unrated .tile')).toHaveCount(0);
 
   // Swapping: dragging a rated sample over its neighbour moves it past, and dragging it back restores the order.
   const ratedIds = () => rated.locator('.tile').evaluateAll((ts) => ts.map((t) => (t as HTMLElement).dataset.id));
@@ -134,7 +136,7 @@ test('dragging to the edge of the window scrolls to boxes that are off screen', 
   const box = (await rated.boundingBox())!;
   await page.mouse.move(box.x + box.width - 30, box.y + 40, { steps: 10 }); // empty space beside the references
   await page.mouse.up();
-  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
+  await expect(page.locator('.box.unrated .tile')).toHaveCount(7);
 });
 
 test('Back from the rating screen always asks, with Keep rating as the safe choice', async ({ page }) => {
@@ -146,7 +148,7 @@ test('Back from the rating screen always asks, with Keep rating as the safe choi
   const t = (await tile.boundingBox())!;
   const r = (await page.locator('.box.rated').boundingBox())!;
   await drag(page, { x: t.x + t.width / 2, y: t.y + 20 }, { x: r.x + r.width - 20, y: r.y + r.height - 15 });
-  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
+  await expect(page.locator('.box.unrated .tile')).toHaveCount(7);
   const order = await page.locator('.tile').evaluateAll((ts) => ts.map((x) => (x as HTMLElement).dataset.id));
   await page.getByRole('button', { name: 'Study info' }).click();
   const info = page.locator('dialog');
@@ -166,7 +168,7 @@ test('Back from the rating screen always asks, with Keep rating as the safe choi
   await expect(page.locator('.rating')).toHaveCount(1);
   await back.click();
   await page.getByRole('button', { name: 'Keep rating' }).click();
-  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
+  await expect(page.locator('.box.unrated .tile')).toHaveCount(7);
   await back.click();
   await page.getByRole('button', { name: 'Leave without saving' }).click();
   await expect(page.getByRole('heading', { name: 'Which study are you rating?' })).toBeVisible();

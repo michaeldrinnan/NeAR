@@ -46,7 +46,8 @@ body {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
-.appbar h1 { flex: 1; margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; }
+.appbar h1 { flex: 1; display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; }
+.logo-bridge { flex: none; height: 44px; width: auto; color: #dbe4ee; }
 @media (max-width: 600px) {
   .appbar { flex-wrap: wrap; gap: 8px; }
   .appbar h1 { flex-basis: 100%; }
@@ -274,10 +275,11 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
 }
 .play:hover { background: #fff; }
 
-/* The rating screen's one slim bar: Back, Study info, the player, the count, Save and finish. */
+/* The rating screen's one slim bar: Back, Study info, the player, Save and finish. */
 .rating-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .rating-bar audio { flex: 1; min-width: 220px; height: 40px; }
-.rating-bar .count { font-weight: 700; white-space: nowrap; }
+.prompt { color: var(--muted); font-size: 0.9rem; margin-bottom: -6px; }
+.prompt.best { color: var(--text); font-weight: 700; }
 .check { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .check input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
 

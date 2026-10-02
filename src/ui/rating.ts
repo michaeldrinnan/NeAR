@@ -63,24 +63,22 @@ export function runRating(
         <button type="button" class="back">← Back</button>
         <button type="button" class="info">Study info</button>
         <audio controls preload="auto" aria-label="Player"></audio>
-        <span class="count" aria-live="polite"></span>
         <button type="button" class="primary finish">Save and finish</button>
       </div>
       <div class="instr rating-instr"></div>
+      <p class="prompt best">Put the BEST sample here at top left.</p>
       <div class="box rated" aria-label="Rated samples, best at top left"></div>
+      <p class="prompt">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
       <div class="box unrated" aria-label="Unrated samples"></div>
     </section>`;
 
   const instr = root.querySelector<HTMLElement>('.rating-instr')!;
-  const lines = opts.instructions.length
-    ? opts.instructions
-    : ['Put the best sample at the top left of the upper box. The lower box holds the samples still to rate.'];
-  for (const line of lines) instr.append(Object.assign(document.createElement('p'), { textContent: line }));
+  for (const line of opts.instructions) instr.append(Object.assign(document.createElement('p'), { textContent: line }));
+  instr.hidden = !opts.instructions.length;
   root.querySelector('.back')!.addEventListener('click', () => opts.onBack());
   root.querySelector('.info')!.addEventListener('click', () => opts.onInfo());
   const ratedBox = root.querySelector<HTMLElement>('.rated')!;
   const unratedBox = root.querySelector<HTMLElement>('.unrated')!;
-  const countLabel = root.querySelector<HTMLElement>('.count')!;
   const finishBtn = root.querySelector<HTMLButtonElement>('.finish')!;
   const audio = root.querySelector('audio')!;
 
@@ -154,14 +152,8 @@ export function runRating(
   const order = opts.random ? shuffle(samples) : samples;
   order.forEach((s, i) => unratedBox.append(makeTile(s, false, i + 1)));
 
-  const total = samples.length;
   const unratedCount = () => unratedBox.querySelectorAll('.tile').length;
-  const updateCount = () => {
-    countLabel.textContent = `${unratedCount()} of ${total} left to rate`;
-  };
-  updateCount();
-
-  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, animatePreference);
+  const disableDrag = enableDrag([ratedBox, unratedBox], () => {}, animatePreference);
 
   const warnOnLeave = (e: BeforeUnloadEvent) => e.preventDefault();
   window.addEventListener('beforeunload', warnOnLeave);

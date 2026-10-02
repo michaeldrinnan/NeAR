@@ -116,8 +116,9 @@ how to rate, where results go, the rater's *Animate* preference, and a required 
 name**. *Start rating* stays unavailable until a name is entered (a name containing a comma
 is refused, with a note). *Back* there returns to wherever the study was opened from.
 
-The **rating screen** itself is one slim bar (*Back*, *Study info*, the player, the count and
-*Save and finish*), the instructions, and the two boxes (rated above, unrated below, as in 2012).
+The **rating screen** itself is one slim bar (*Back*, *Study info*, the player and *Save and
+finish*), the study's instructions, and the two boxes (rated above, unrated below, as in 2012),
+each with its short prompt (*Put the BEST sample here at top left.*, and the unrated-box note).
 
 - The session name is fixed once rating has started, so the saved row always carries the name
   the session started with. *Study info* shows the same information read-only, and *Return to
