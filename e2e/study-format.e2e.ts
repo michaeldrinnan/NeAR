@@ -138,6 +138,7 @@ test('a changed package is a different study with its own results; the same pack
     await page.getByRole('button', { name: 'Not now' }).click();
   };
   await openStudy(page, v1);
+  await expect(page.locator('[data-loaded]')).toContainText('“Versioned”, version 1'); // wait until it has loaded
   await session();
   await expect(page.locator('[data-kept]')).toContainText('“Versioned v1”: 1 session');
   await openStudy(page, v2);
