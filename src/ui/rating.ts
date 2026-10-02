@@ -66,7 +66,7 @@ export function runRating(
         <button type="button" class="primary finish">Save and finish</button>
       </div>
       <div class="instr rating-instr"></div>
-      <p class="prompt best">Put the BEST sample here at top left.</p>
+      <p class="prompt">Put the BEST sample here at top left.</p>
       <div class="box rated" aria-label="Rated samples, best at top left"></div>
       <p class="prompt">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
       <div class="box unrated" aria-label="Unrated samples"></div>
