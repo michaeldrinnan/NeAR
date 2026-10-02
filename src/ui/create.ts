@@ -5,6 +5,7 @@ import {
   baseName,
   defaultDefinition,
   fileHashes,
+  formatNote,
   identityOf,
   layoutProblem,
   layoutStudy,
@@ -264,7 +265,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
           ? `Save writes ${STUDY_FILE} into the study folder, and results go to a file named after the study in the same folder. `
           : `This browser can’t write to folders, so Save downloads ${STUDY_FILE} for you to put in the study folder, and results are kept in this browser. `,
         'Any change to the voices, options, title or instructions gives the study a new code, so its results start in a new file. ',
-        'A 2012-style folder with the WAVs loose at the top (no Test sub-folder) is treated as the voices to rate.',
+        'Voices can be WAV, MP3, M4A, AAC, FLAC, Ogg or Opus files, mixed as you like. A 2012-style folder with the audio files loose at the top (no Test sub-folder) is treated as the voices to rate.',
       ]),
     ]),
   );
@@ -348,6 +349,8 @@ function foundBox(c: Chosen, render: () => void): HTMLElement {
       el('div', { className: 'row' }, [useDefaults]),
     );
   }
+  const note = c.problem ? null : formatNote([...c.samples, ...c.references]);
+  if (note) children.push(el('p', { className: 'note warnings', textContent: note }));
   if (c.warnings.length) children.push(el('p', { className: 'note warnings', textContent: c.warnings.join(' ') }));
   return el('div', { className: c.problem || c.textError ? 'found bad' : 'found' }, children);
 }

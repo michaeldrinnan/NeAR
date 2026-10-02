@@ -20,8 +20,29 @@ export function shuffle<T>(items: readonly T[], random: () => number = Math.rand
   return out;
 }
 
-export function isWav(name: string): boolean {
-  return name.toLowerCase().endsWith('.wav');
+/** The audio files NeAR accepts, by extension, with their media types. */
+export const AUDIO_TYPES: Readonly<Record<string, string>> = {
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+};
+
+/** Formats that some browsers (Safari, older iPads) can't play. */
+export const PATCHY_FORMATS = new Set(['ogg', 'opus']);
+
+export const extension = (name: string) => (name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '');
+
+/** The media type for an accepted audio file name (any case), or undefined. */
+export function audioType(name: string): string | undefined {
+  return Object.hasOwn(AUDIO_TYPES, extension(name)) ? AUDIO_TYPES[extension(name)] : undefined;
+}
+
+export function isAudio(name: string): boolean {
+  return audioType(name) !== undefined;
 }
 
 /** File name without its extension, as shown on a tile. */

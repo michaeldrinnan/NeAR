@@ -133,19 +133,25 @@ test('Create: folders that can’t be studies keep the page locked with a plain 
     Empty: { 'readme.txt': 'x' },
     One: { 'Test/only.wav': W('1') },
     Broken: { 'Test/a.wav': W('a'), 'Test/b.wav': 'not audio' },
+    Mislabelled: { 'Test/a.WAV': W('a'), 'Test/b.mp3': 'not audio' },
+    Patchy: { 'Test/a.wav': W('a'), 'Test/b.ogg': 'OggS but not really' },
     Mistake: { 'Test/a.wav': W('a'), 'Test/b.wav': W('b'), 'study.txt': 'title = T\nrandom = maybe\n' },
     Old: { 'a.wav': W('a'), 'b.wav': W('b') },
   });
   await toCreate(page);
   const problem = page.locator('.found .problem');
   await chooseFolder(page, 'Empty');
-  await expect(problem).toContainText('No WAV files were found');
+  await expect(problem).toContainText('No audio files (WAV, MP3, M4A, AAC, FLAC, Ogg or Opus) were found');
   await expect(page.locator('.step.needs')).toHaveCount(2);
   await chooseFolder(page, 'One');
   await expect(problem).toContainText('Only one voice to rate was found in Test');
   await chooseFolder(page, 'Broken');
-  await expect(problem).toContainText('“b.wav” in Test is not a playable WAV file');
+  await expect(problem).toContainText('“b.wav” in Test can’t be played in this browser');
   await expect(page.getByRole('button', { name: 'Try it now' })).toBeDisabled();
+  await chooseFolder(page, 'Mislabelled'); // any case, any accepted type
+  await expect(problem).toContainText('“b.mp3” in Test can’t be played in this browser');
+  await chooseFolder(page, 'Patchy');
+  await expect(problem).toContainText('Ogg and Opus files don’t play in some browsers');
 
   // A mistake in study.txt names the line, and offers the defaults instead.
   await chooseFolder(page, 'Mistake');
@@ -155,7 +161,7 @@ test('Create: folders that can’t be studies keep the page locked with a plain 
   await expect(page.locator('.step.needs')).toHaveCount(0);
   await expect(page.locator('#study-title')).toHaveValue('Mistake');
 
-  // 2012 style: WAVs loose in the folder are the voices to rate, with no references.
+  // 2012 style: audio files loose in the folder are the voices to rate, with no references.
   await chooseFolder(page, 'Old');
   await expect(page.locator('.found')).toContainText('2 voices to rate, loose in the folder (2012 style)');
   await expect(page.locator('.found')).toContainText('No Ref folder, so there are no references');

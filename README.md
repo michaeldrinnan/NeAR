@@ -1,6 +1,6 @@
 # NeAR — Newcastle Audio Ranking test (web)
 
-A web/PWA port of the 2012 Windows app (C# WinForms; source not included). Raters play WAV
+A web/PWA port of the 2012 Windows app (C# WinForms; source not included). Raters play audio
 samples and drag them into rank order; each session appends one row to the study's results file.
 
 **Live app: https://michaeldrinnan.github.io/NeAR/**
@@ -33,7 +33,7 @@ web server…). The build uses relative paths, so it also works from a sub-folde
 Home has four bars, each opening its own page with a large **Back** button:
 
 - **New to NeAR?** — a short introduction, *Try the example* and the user manual.
-- **Create a study** — choose a study folder (`Test/` and `Ref/` sub-folders of WAVs), set
+- **Create a study** — choose a study folder (`Test/` and `Ref/` sub-folders of audio files: WAV, MP3, M4A/AAC, FLAC, Ogg/Opus), set
   the options On or Off, give it a title and instructions, then *Save* (writes `study.txt`),
   *Save as zip…* or *Try it now*. Editing a study means choosing its folder again.
 - **Rate a study** — example studies, *Carry on* with the last study, recent studies, and

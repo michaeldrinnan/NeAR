@@ -14,23 +14,38 @@ A study is a folder (or a plain **`.zip`** of one) containing:
 
 ```
 study.txt     the definition (optional: without it, the defaults below apply)
-Test/*.wav    the voices to rate (at least two)
-Ref/*.wav     reference voices (optional)
+Test/          the voices to rate (at least two audio files)
+Ref/           reference voices (optional)
 anything else is ignored by NeAR (and counted on the Create page)
 ```
 
 - Folder names are matched in any case. The older names **`TestItems/`** and **`RefItems/`**
   are accepted too; if both a new and an old name are present, `Test` and `Ref` win.
-- **2012-style folders:** if there is no `Test` folder, WAV files loose in the study folder
-  are the voices to rate. If there is a `Test` folder, loose WAVs are ignored.
-- **References are used if, and only if, the `Ref` folder contains WAV files.** An empty or
+- **2012-style folders:** if there is no `Test` folder, audio files loose in the study folder
+  are the voices to rate. If there is a `Test` folder, loose audio files are ignored.
+- **References are used if, and only if, the `Ref` folder contains audio files.** An empty or
   missing `Ref` means no references.
-- Only WAV files directly inside `Test` and `Ref` count; sub-folders are ignored. File order
+- Only audio files directly inside `Test` and `Ref` count; sub-folders are ignored. File order
   is the usual Windows (NTFS) order.
 - In a zip, everything may also sit inside a single top-level folder (as zips made with
   *Send to → Compressed folder* or the Finder's *Compress* often are).
-- A folder that can't be a study is refused with a plain message: no WAV files, fewer than
-  two voices to rate, or a file that isn't a playable WAV (checked by its RIFF/WAVE header).
+- A folder that can't be a study is refused with a plain message: no audio files, fewer than
+  two voices to rate, or a file this browser can't play (each file is decoded when the study
+  is opened, and the message names the first that fails).
+
+### Audio files
+
+| Extension (any case) | Format | Plays in |
+|---|---|---|
+| `.wav` | WAV (PCM) | every browser |
+| `.mp3` | MP3 | every browser |
+| `.m4a`, `.aac` | AAC | every browser |
+| `.flac` | FLAC | every current browser |
+| `.ogg`, `.opus` | Ogg Vorbis / Opus | Chrome, Edge, Firefox; **may not play in Safari or on iPads** |
+
+Formats can be mixed in one study. Other files (e.g. `.wma`) are ignored and counted. The
+Create page notes any Ogg or Opus files, and a browser that can't play one refuses the study,
+suggesting WAV, MP3 or M4A instead. Results columns use the full file names, extension included.
 
 ## 2. The definition file, `study.txt`
 

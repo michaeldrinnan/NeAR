@@ -1,9 +1,9 @@
 /**
  * NeAR studies (docs/study-format.md): a folder, or a .zip of one, holding study.txt plus
- * Test/*.wav and optionally Ref/*.wav.
+ * Test/ holding the voices to rate (WAV, MP3, M4A/AAC, FLAC, Ogg/Opus) and optionally Ref/.
  */
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
-import { compareNtfs, isWav } from './order';
+import { audioType, compareNtfs, extension, isAudio, PATCHY_FORMATS } from './order';
 
 export const STUDY_FILE = 'study.txt';
 
@@ -158,7 +158,7 @@ export interface StudyEntry {
 }
 
 export interface StudyLayout {
-  /** The test folder's actual name ("Test", "testitems"…), or null for 2012-style WAVs loose in the folder. */
+  /** The test folder's actual name ("Test", "testitems"…), or null for 2012-style audio files loose in the folder. */
   testFolder: string | null;
   /** The reference folder's actual name, or null if there is none. */
   refFolder: string | null;
@@ -188,8 +188,8 @@ export function layoutStudy(entries: readonly StudyEntry[]): StudyLayout {
   const testFolder = pickFolder(folders, TEST);
   const refFolder = pickFolder(folders, REF);
   const wavsIn = (folder: string) =>
-    parts.filter(({ p }) => p.length === 2 && p[0] === folder && isWav(p[1])).map(({ e }) => e);
-  const loose = parts.filter(({ p }) => p.length === 1 && isWav(p[0])).map(({ e }) => e);
+    parts.filter(({ p }) => p.length === 2 && p[0] === folder && isAudio(p[1])).map(({ e }) => e);
+  const loose = parts.filter(({ p }) => p.length === 1 && isAudio(p[0])).map(({ e }) => e);
   const samples = testFolder ? wavsIn(testFolder) : loose;
   const references = refFolder ? wavsIn(refFolder) : [];
   const studyText = parts.find(({ p }) => p.length === 1 && p[0].toLowerCase() === STUDY_FILE)?.e ?? null;
@@ -209,19 +209,53 @@ export function layoutStudy(entries: readonly StudyEntry[]): StudyLayout {
 
 export const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
-/** True if the file starts like a WAV file (RIFF…WAVE). */
-export async function looksLikeWav(file: Blob): Promise<boolean> {
-  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const text = (from: number) => String.fromCharCode(...head.slice(from, from + 4));
-  return head.length === 12 && (text(0) === 'RIFF' || text(0) === 'RF64') && text(8) === 'WAVE';
+/** True if the file starts the way files of its type do (a quick check where audio can't be decoded). */
+export async function looksLikeAudio(file: Blob, name: string): Promise<boolean> {
+  const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const text = (from: number, length = 4) => String.fromCharCode(...b.slice(from, from + length));
+  switch (extension(name)) {
+    case 'wav':
+      return (text(0) === 'RIFF' || text(0) === 'RF64') && text(8) === 'WAVE';
+    case 'mp3':
+      return text(0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0);
+    case 'm4a':
+      return text(4) === 'ftyp';
+    case 'aac':
+      return text(0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xf6) === 0xf0);
+    case 'flac':
+      return text(0) === 'fLaC' || text(0, 3) === 'ID3';
+    case 'ogg':
+    case 'opus':
+      return text(0) === 'OggS';
+    default:
+      return false;
+  }
 }
 
-/** Why a laid-out folder can't be a study (no voices, too few, or a file that isn't a WAV), or null. */
+/**
+ * True if this browser can play the file: it is decoded where the Web Audio API is available,
+ * otherwise (e.g. in unit tests) only its first bytes are checked.
+ */
+export async function playable(file: File): Promise<boolean> {
+  if (!(await looksLikeAudio(file, file.name))) return false;
+  const Offline = (globalThis as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
+  if (!Offline) return true;
+  try {
+    await new Offline(1, 1, 8000).decodeAudioData(await file.arrayBuffer());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const KINDS = 'WAV, MP3, M4A, AAC, FLAC, Ogg or Opus';
+
+/** Why a laid-out folder can't be a study (no voices, too few, or a file that won't play), or null. */
 export async function layoutProblem(layout: StudyLayout, files: { samples: File[]; references: File[] }): Promise<string | null> {
   if (!layout.samples.length) {
     return layout.testFolder
-      ? `There are no WAV files in the ${layout.testFolder} folder.`
-      : 'No WAV files were found. Put the voices to rate in a sub-folder called Test, and any reference voices in one called Ref.';
+      ? `There are no audio files (${KINDS}) in the ${layout.testFolder} folder.`
+      : `No audio files (${KINDS}) were found. Put the voices to rate in a sub-folder called Test, and any reference voices in one called Ref.`;
   }
   if (layout.samples.length < 2) {
     return `Only one voice to rate was found${layout.testFolder ? ` in ${layout.testFolder}` : ''}. A study needs at least two.`;
@@ -229,10 +263,21 @@ export async function layoutProblem(layout: StudyLayout, files: { samples: File[
   const where = (f: string | null) => (f ? ` in ${f}` : '');
   for (const [list, folder] of [[files.samples, layout.testFolder], [files.references, layout.refFolder]] as const) {
     for (const f of list) {
-      if (!(await looksLikeWav(f))) return `“${f.name}”${where(folder)} is not a playable WAV file. Replace or remove it.`;
+      if (await playable(f)) continue;
+      const hint = PATCHY_FORMATS.has(extension(f.name))
+        ? ' Ogg and Opus files don’t play in some browsers, such as Safari on older iPads and Macs: convert it to WAV, MP3 or M4A.'
+        : ' Replace or remove it.';
+      return `“${f.name}”${where(folder)} can’t be played in this browser: it may be damaged, or not really the type its name says.${hint}`;
     }
   }
   return null;
+}
+
+/** A note for studies with formats that some browsers can't play, or null. */
+export function formatNote(files: readonly File[]): string | null {
+  const patchy = files.filter((f) => PATCHY_FORMATS.has(extension(f.name)));
+  if (!patchy.length) return null;
+  return `${patchy.length} file${patchy.length === 1 ? ' is' : 's are'} Ogg or Opus, which may not play in Safari or on iPads. WAV, MP3 or M4A play everywhere.`;
 }
 
 // ---- identity ----
@@ -343,7 +388,7 @@ export async function readStudyZip(bytes: Uint8Array, zipName = 'Study'): Promis
   names = names.filter((n) => n.startsWith(strip));
   const entries: StudyEntry[] = names.map((n) => ({
     path: n.slice(strip.length),
-    file: async () => new File([unzipped[n] as Uint8Array<ArrayBuffer>], baseName(n), { type: isWav(n) ? 'audio/wav' : '' }),
+    file: async () => new File([unzipped[n] as Uint8Array<ArrayBuffer>], baseName(n), { type: audioType(n) ?? '' }),
   }));
   return readStudy(entries, parseStudyFileName(zipName)?.title ?? folderName);
 }
@@ -353,7 +398,7 @@ export async function makeStudyZip(def: StudyDefinition, samples: File[], refere
   const tree: Zippable = { [STUDY_FILE]: strToU8(writeStudyText(def)) };
   const add = async (folder: string, files: File[]) => {
     const dir: Zippable = {};
-    for (const f of files) dir[f.name] = [new Uint8Array(await f.arrayBuffer()), { level: 0 }]; // WAVs barely compress
+    for (const f of files) dir[f.name] = [new Uint8Array(await f.arrayBuffer()), { level: 0 }]; // audio barely compresses
     tree[folder] = dir;
   };
   await add('Test', samples);

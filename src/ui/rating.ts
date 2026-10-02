@@ -104,7 +104,7 @@ export function runRating(
       if (request !== playRequest || (e as DOMException).name === 'AbortError') return; // superseded by another Play
       await alertBox(
         `There was a problem trying to play this file:\n  ${item.name}\n\n` +
-          `Has it been moved or renamed since starting? Is it a valid WAV file?`,
+          `Has it been moved or renamed since starting? Is it a valid audio file?`,
       );
     }
   }

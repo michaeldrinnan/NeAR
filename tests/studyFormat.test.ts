@@ -3,7 +3,9 @@ import { strToU8, zipSync } from 'fflate';
 import {
   DEFAULT_OPTIONS,
   fileTitle,
+  formatNote,
   layoutStudy,
+  looksLikeAudio,
   makeStudyZip,
   parseStudyFileName,
   parseStudyText,
@@ -128,6 +130,37 @@ describe('study folders', () => {
     expect(both.samples.map((e) => e.path)).toEqual(['Test/b.wav', 'Test/c.wav']);
     expect(both.ignored).toBe(1);
   });
+
+  it('accepts WAV, MP3, M4A, AAC, FLAC, Ogg and Opus in any case, mixed, sorted by name', () => {
+    const l = layoutStudy(entries(['Test/f.FLAC', 'Test/a.mp3', 'Test/c.Wav', 'Test/b.m4a', 'Test/d.aac', 'Test/e.ogg', 'Test/g.opus', 'Test/h.wma', 'Test/i.txt']));
+    expect(l.samples.map((e) => e.path)).toEqual(['Test/a.mp3', 'Test/b.m4a', 'Test/c.Wav', 'Test/d.aac', 'Test/e.ogg', 'Test/f.FLAC', 'Test/g.opus']);
+    expect(l.ignored).toBe(2);
+  });
+});
+
+describe('audio files', () => {
+  const file = (name: string, head: number[] | string) => new File([typeof head === 'string' ? strToU8(head) : new Uint8Array(head)], name);
+
+  it('recognise each accepted type by how it starts', async () => {
+    const good: [string, number[] | string][] = [
+      ['a.wav', 'RIFF\0\0\0\0WAVEfmt '],
+      ['a.mp3', 'ID3\x04\0\0\0\0\0\0\0\0'],
+      ['b.mp3', [0xff, 0xfb, 0x90, 0x64, 0, 0, 0, 0, 0, 0, 0, 0]],
+      ['a.m4a', '\0\0\0\x20ftypM4A '],
+      ['a.aac', [0xff, 0xf1, 0x50, 0x80, 0, 0, 0, 0, 0, 0, 0, 0]],
+      ['a.flac', 'fLaC\0\0\0\x22\0\0\0\0'],
+      ['a.ogg', 'OggS\0\x02\0\0\0\0\0\0'],
+      ['a.opus', 'OggS\0\x02\0\0\0\0\0\0'],
+    ];
+    for (const [name, head] of good) expect(await looksLikeAudio(file(name, head), name), name).toBe(true);
+    expect(await looksLikeAudio(file('a.mp3', 'RIFF\0\0\0\0WAVE'), 'a.mp3')).toBe(false); // not what its name says
+    expect(await looksLikeAudio(file('a.flac', 'not audio at all'), 'a.flac')).toBe(false);
+  });
+
+  it('notes Ogg and Opus files, which some browsers can’t play', () => {
+    expect(formatNote([wav('a.wav'), new File([], 'b.mp3')])).toBeNull();
+    expect(formatNote([wav('a.wav'), new File([], 'b.OGG'), new File([], 'c.opus')])).toMatch(/^2 files are Ogg or Opus, which may not play in Safari/);
+  });
 });
 
 describe('study zips', () => {
@@ -166,9 +199,10 @@ describe('study zips', () => {
 
   it('explain what is wrong with an unusable study', async () => {
     await expect(readStudyZip(strToU8('not a zip'))).rejects.toThrow(/not a readable \.zip/);
-    await expect(readStudyZip(zipSync({ 'study.txt': strToU8('title = T') }))).rejects.toThrow(/No WAV files were found/);
+    await expect(readStudyZip(zipSync({ 'study.txt': strToU8('title = T') }))).rejects.toThrow('No audio files (WAV, MP3, M4A, AAC, FLAC, Ogg or Opus) were found');
     await expect(readStudyZip(zipSync({ Test: { 'a.wav': wavBytes('A') } }))).rejects.toThrow(/Only one voice to rate was found in Test/);
-    await expect(readStudyZip(zipSync({ Test: { 'a.wav': wavBytes('A'), 'b.wav': strToU8('not audio') } }))).rejects.toThrow(/“b\.wav” in Test is not a playable WAV file/);
+    await expect(readStudyZip(zipSync({ Test: { 'a.wav': wavBytes('A'), 'b.wav': strToU8('not audio') } }))).rejects.toThrow('“b.wav” in Test can’t be played');
+    await expect(readStudyZip(zipSync({ Test: { 'a.wav': wavBytes('A'), 'b.opus': strToU8('not audio') } }))).rejects.toThrow('Ogg and Opus files don’t play in some browsers');
     await expect(readStudyZip(zipSync({ 'study.txt': strToU8('random = maybe'), Test: { 'a.wav': wavBytes('A'), 'b.wav': wavBytes('B') } }))).rejects.toThrow(/line 1/);
   });
 

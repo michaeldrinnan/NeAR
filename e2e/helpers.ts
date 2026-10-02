@@ -1,7 +1,14 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Text that starts like a WAV file, so NeAR accepts it as one; `body` makes it distinct. */
-export const W = (body: string) => `RIFF\0\0\0\0WAVE${body}`;
+/**
+ * A tiny real WAV file (8 kHz, 8-bit mono, 80 samples) as text, so browsers can decode it;
+ * every byte is below 0x80, so it survives being stored as a string. `body` makes it distinct.
+ */
+export const W = (body: string) => {
+  const le = (n: number, bytes: number) => Array.from({ length: bytes }, (_, i) => String.fromCharCode((n >> (8 * i)) & 0xff)).join('');
+  const data = body.repeat(Math.ceil(80 / body.length)).slice(0, 80);
+  return `RIFF${le(36 + data.length, 4)}WAVEfmt ${le(16, 4)}${le(1, 2)}${le(1, 2)}${le(8000, 4)}${le(8000, 4)}${le(1, 2)}${le(8, 2)}data${le(data.length, 4)}${data}`;
+};
 
 /** Drags a tile with real mouse moves, the way a rater would. */
 export async function drag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
