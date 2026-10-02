@@ -189,6 +189,23 @@ test('recent studies: carry on with the last one, or open any from the list', as
   await expect(page.locator('.saved')).toContainText('Saved to this browser');
   await page.getByRole('button', { name: '← Back' }).click();
   await expect(page.locator('.carry')).toContainText('1 session saved');
+
+  // Remove asks first, warning about sessions not yet downloaded, and offers the download.
+  const item = page.locator('.list .item').filter({ hasText: 'Example: no references' });
+  await item.getByRole('button', { name: 'Remove' }).click();
+  const dialog = page.locator('dialog');
+  await expect(dialog).toContainText('Its results (1 session) stay in this browser');
+  await expect(dialog).toContainText('WARNING: this session has not been downloaded yet');
+  await page.keyboard.press('Escape'); // keeps it
+  await expect(page.locator('.list .item')).toHaveCount(1);
+  await item.getByRole('button', { name: 'Remove' }).click();
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download results' }).click();
+  expect((await download).suggestedFilename()).toMatch(/^NeAR_Example_ no references_[0-9a-f]{8}\.csv$/);
+  await expect(dialog).not.toContainText('WARNING'); // asked again, now downloaded
+  await expect(dialog).toContainText('You can open it again from Example studies.');
+  await dialog.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.list .item')).toHaveCount(0);
 });
 
 test('Results: download with the study’s file name, import, delete, and older results', async ({ page }) => {

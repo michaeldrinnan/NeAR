@@ -1,5 +1,5 @@
 import { CSV_FILE, parseLines, serializeLines } from './csv';
-import { commitStudy, readStudyLines, studyId, writeStudy } from './studies';
+import { commitStudy, markDownloaded, readStudyLines, studyId, writeStudy } from './studies';
 import { studyFileName } from './studyFormat';
 import type { OpenStudy } from './sources';
 
@@ -134,4 +134,10 @@ export async function saveCopy(lines: readonly string[], suggestedName: string, 
   } catch {
     return null;
   }
+}
+
+/** Downloads a browser-kept study's results and remembers that they were downloaded. */
+export function downloadStudyResults(id: string, lines: readonly string[], fileName: string): Promise<void> {
+  downloadLines(lines, fileName);
+  return markDownloaded(id, lines.length).catch(() => {}); // only informs a later warning
 }

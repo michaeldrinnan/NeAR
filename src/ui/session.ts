@@ -1,6 +1,7 @@
 import { buildHeader, buildRow, computeRanks, raterUsed, summarize } from '../lib/csv';
-import { downloadLines, folderCopy, legacyResultsFile, resultsFor, saveCopy, type ResultsStore } from '../lib/results';
+import { downloadLines, downloadStudyResults, folderCopy, legacyResultsFile, resultsFor, saveCopy, type ResultsStore } from '../lib/results';
 import { rememberStudy } from '../lib/recent';
+import { studyId } from '../lib/studies';
 import { audioItems, type OpenStudy } from '../lib/sources';
 import { ratingOptions, sourceLabel, studyCode, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
@@ -276,7 +277,7 @@ async function writeResults(store: ResultsStore, lines: string[], study: OpenStu
           { label: 'Not now', value: 'no' },
         ],
       );
-      if (key === 'yes') downloadLines(committed, store.fileName); // exactly what was saved
+      if (key === 'yes') downloadStudyResults(studyId(study.identity), committed, store.fileName); // exactly what was saved
       return `Saved to this browser at ${time}. Download ${store.fileName} from the Results page at any time.`;
     } catch (e) {
       const key = await yesNoCancel(

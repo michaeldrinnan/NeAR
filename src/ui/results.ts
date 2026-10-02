@@ -1,6 +1,6 @@
 import { summarize } from '../lib/csv';
-import { downloadLines, importResults } from '../lib/results';
-import { deleteStudy, legacyResults, listStudies, type Study } from '../lib/studies';
+import { downloadLines, downloadStudyResults, importResults } from '../lib/results';
+import { deleteStudy, legacyResults, listStudies, notDownloaded, readStudyRecord, type Study } from '../lib/studies';
 import { canUseFolders } from '../lib/sources';
 import { fileTitle, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask } from './dialog';
@@ -41,7 +41,7 @@ export function showResults(root: HTMLElement, back: () => void): void {
           const { sessions, last } = summarize(s.lines);
           const download = el('button', { type: 'button', textContent: 'Download' });
           download.addEventListener('click', () =>
-            s.lines?.length ? downloadLines(s.lines, fileNameFor(s)) : void alertBox(`“${s.name}” has no results to download.`),
+            s.lines?.length ? downloadStudyResults(s.id, s.lines, fileNameFor(s)) : void alertBox(`“${s.name}” has no results to download.`),
           );
           const remove = el('button', { type: 'button', textContent: 'Delete…' });
           remove.addEventListener('click', () => void exclusive(async () => {
@@ -101,22 +101,28 @@ export function showResults(root: HTMLElement, back: () => void): void {
 }
 
 /** Asks before deleting, offering a download first. Resolves true if the study was deleted. */
-async function confirmDelete(s: Study): Promise<boolean> {
+async function confirmDelete(study: Study): Promise<boolean> {
+  let s = study;
   for (;;) {
+    const pending = notDownloaded(s);
+    const warning = pending
+      ? `\n\nWARNING: ${pending === 1 ? '1 session has' : `${pending} sessions have`} not been downloaded yet.`
+      : '';
     const key = await ask(
-      `Delete “${s.name}” and all its results from this browser? This cannot be undone, so download the results first if you might need them.`,
+      `Delete “${s.name}” and all its results from this browser? This cannot be undone, so download the results first if you might need them.${warning}`,
       [
-        { label: 'Download results', value: 'download' as const },
+        { label: 'Download results', value: 'download' as const, primary: pending > 0 },
         { label: 'Delete', value: 'delete' as const, danger: true },
-        { label: 'Keep it', value: 'keep' as const, primary: true },
+        { label: 'Keep it', value: 'keep' as const, primary: !pending },
       ],
       'Delete results',
       'keep',
     );
     if (key === 'keep') return false;
     if (key === 'download') {
-      if (s.lines?.length) downloadLines(s.lines, fileNameFor(s));
+      if (s.lines?.length) await downloadStudyResults(s.id, s.lines, fileNameFor(s));
       else await alertBox(`“${s.name}” has no results to download.`);
+      s = (await readStudyRecord(s.id).catch(() => undefined)) ?? s;
       continue;
     }
     await deleteStudy(s.id);

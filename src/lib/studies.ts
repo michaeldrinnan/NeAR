@@ -10,6 +10,8 @@ export interface Study {
   lines: string[] | null;
   /** The study's identity (docs/study-format.md §5). Absent for studies made by earlier versions of NeAR. */
   format?: string;
+  /** How many lines the results had when they were last downloaded. */
+  downloaded?: number;
   /** Earlier versions: a checksum of the recordings. */
   fingerprint?: string;
 }
@@ -41,7 +43,7 @@ const missing = () => new Error('The results for this study could not be found (
 export async function writeStudy(id: string, lines: readonly string[]): Promise<void> {
   await kvUpdate<Study>(key(id), (study) => {
     if (!study) throw missing();
-    return { put: { ...study, lines: [...lines] } };
+    return { put: { ...study, lines: [...lines], downloaded: undefined } };
   });
 }
 
@@ -90,4 +92,20 @@ export async function legacyResults(): Promise<{ key: string; lines: string[] }[
   const keys = (await kvKeys()).filter((k): k is string => typeof k === 'string' && k.startsWith('results:'));
   const entries = await Promise.all(keys.map(async (k) => ({ key: k, lines: await kvGet<string[]>(k) })));
   return entries.filter((e): e is { key: string; lines: string[] } => Array.isArray(e.lines));
+}
+
+/** Remembers that a study's results were downloaded as they are now (`lines` lines). */
+export async function markDownloaded(id: string, lines: number): Promise<void> {
+  await kvUpdate<Study>(key(id), (study) => (study ? { put: { ...study, downloaded: Math.max(study.downloaded ?? 0, lines) } } : null));
+}
+
+/** Sessions saved since the results were last downloaded (all of them if never). */
+export function notDownloaded(study: Pick<Study, 'lines' | 'downloaded'>): number {
+  const lines = study.lines?.length ?? 0;
+  const done = Math.min(study.downloaded ?? 0, lines);
+  return Math.max(0, lines - Math.max(done, 1)); // the header line is not a session
+}
+
+export async function readStudyRecord(id: string): Promise<Study | undefined> {
+  return kvGet<Study>(key(id));
 }

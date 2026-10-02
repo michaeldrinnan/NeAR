@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { commitStudy, deleteStudy, listStudies, readStudyLines, StudyConflictError, studyId, writeStudy } from '../src/lib/studies';
+import { commitStudy, deleteStudy, listStudies, markDownloaded, notDownloaded, readStudyLines, StudyConflictError, studyId, writeStudy } from '../src/lib/studies';
 import { resultsFor } from '../src/lib/results';
 import type { OpenStudy } from '../src/lib/sources';
 import { defaultDefinition } from '../src/lib/studyFormat';
@@ -64,6 +64,19 @@ describe('browser-kept results', () => {
     await deleteStudy(id);
     await expect(commitStudy(id, [H, row('First'), row('Late')], [H, row('First')], create)).rejects.toBeInstanceOf(StudyConflictError);
     expect(await readStudyLines(id)).toBeNull();
+  });
+
+  it('remember how much has been downloaded, so a warning can say what hasn’t', async () => {
+    const id = fresh();
+    await commitStudy(id, [H, row('One'), row('Two')], null, create);
+    const record = async () => (await listStudies()).find((s) => s.id === id)!;
+    expect(notDownloaded(await record())).toBe(2);
+    await markDownloaded(id, 3);
+    expect(notDownloaded(await record())).toBe(0);
+    await commitStudy(id, [H, row('One'), row('Two'), row('Three')], [H, row('One'), row('Two')], create);
+    expect(notDownloaded(await record())).toBe(1);
+    await writeStudy(id, [H, row('Imported')]); // an import starts afresh
+    expect(notDownloaded(await record())).toBe(1);
   });
 
   it('are kept per study identity: the same study carries on, a changed one starts afresh', async () => {

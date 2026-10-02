@@ -1,10 +1,11 @@
 import { summarize } from '../lib/csv';
 import { forgetRecent, listRecent, reopenRecent, type RecentStudy } from '../lib/recent';
-import { readStudyLines, studyId } from '../lib/studies';
+import { notDownloaded, readStudyLines, readStudyRecord, studyId } from '../lib/studies';
+import { downloadStudyResults } from '../lib/results';
 import { canUseFolders, filesEntries, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
-import { studyCode } from '../lib/studyFormat';
+import { studyCode, studyFileName } from '../lib/studyFormat';
 import { showCreate } from './create';
-import { alertBox } from './dialog';
+import { alertBox, ask } from './dialog';
 import { backNav, el, page } from './page';
 import { showResults } from './results';
 import { rateStudy } from './session';
@@ -244,6 +245,7 @@ async function showRate(back: () => void) {
       openBtn.addEventListener('click', openRecent(r, openBtn));
       const forget = el('button', { type: 'button', textContent: 'Remove', title: 'Remove from this list (results are kept)' });
       forget.addEventListener('click', async () => {
+        if (!(await confirmRemove(r))) return;
         await forgetRecent(r.identity).catch(() => {});
         again();
       });
@@ -267,4 +269,57 @@ async function showRate(back: () => void) {
   );
 
   root.replaceChildren(page([backNav(back), el('h1', { textContent: 'Which study are you rating?' }), ...panels]));
+}
+
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`;
+
+/**
+ * Asks before removing a study from Recent studies, saying where its results stay and how to
+ * open it again, and warning (with a download) if any sessions haven't been downloaded yet.
+ */
+async function confirmRemove(r: RecentStudy): Promise<boolean> {
+  for (;;) {
+    const parts = [`Remove “${r.title}” from Recent studies?`];
+    const id = studyId(r.identity);
+    let pending = 0;
+    let lines: string[] | null = null;
+    if (r.source.kind === 'folder') {
+      parts.push(
+        `Its results stay in the folder “${r.source.dir.name}”, in ${studyFileName(r.title, r.identity, 'csv')}.`,
+        'To rate it again, use Open study folder….',
+      );
+    } else {
+      const study = await readStudyRecord(id).catch(() => undefined);
+      lines = study?.lines ?? null;
+      const { sessions } = summarize(lines);
+      pending = study ? notDownloaded(study) : 0;
+      parts.push(sessions ? `Its results (${plural(sessions, 'session')}) stay in this browser, on the Results page.` : 'No sessions have been saved for it.');
+      if (pending) {
+        parts.push(
+          `WARNING: ${pending === sessions ? (pending === 1 ? 'this session has' : `all ${pending} sessions have`) : `${plural(pending, 'session')} of these ${pending === 1 ? 'has' : 'have'}`} not been downloaded yet. ` +
+            'Download them first to keep a copy outside this browser.',
+        );
+      }
+      parts.push(
+        r.source.kind === 'zip'
+          ? `To rate it again you will need the study file “${r.source.name}”.`
+          : r.source.url.startsWith('studies/')
+            ? 'You can open it again from Example studies.'
+            : 'You can open it again from its link.',
+      );
+    }
+    const key = await ask(
+      parts.join('\n\n'),
+      [
+        ...(pending ? [{ label: 'Download results', value: 'download' as const, primary: true }] : []),
+        { label: 'Remove', value: 'remove' as const, danger: true },
+        { label: 'Keep it', value: 'keep' as const, primary: !pending },
+      ],
+      'Remove from Recent studies',
+      'keep',
+    );
+    if (key === 'keep') return false;
+    if (key === 'remove') return true;
+    if (lines) await downloadStudyResults(id, lines, studyFileName(r.title, r.identity, 'csv'));
+  }
 }
