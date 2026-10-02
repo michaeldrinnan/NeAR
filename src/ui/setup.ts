@@ -8,7 +8,7 @@ import {
   type Source,
   type SourceKind,
 } from '../lib/sources';
-import { CSV_FILE, buildHeader, buildRow, computeRanks, raterUsed } from '../lib/csv';
+import { CSV_FILE, buildHeader, buildRow, computeRanks, parseLines, raterUsed, sameLines, summarize } from '../lib/csv';
 import { downloadLines, importBrowserResults, resultsFor, saveCopy } from '../lib/results';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
 import { runRating, type RatingOptions } from './rating';
@@ -64,6 +64,8 @@ const pickButtons = (kind: SourceKind) =>
 // Chosen folders and the session name carry over from one session to the next, as in the original.
 const sources: Record<SourceKind, Source | null> = { samples: null, refs: null };
 let rater = '';
+// Refreshes the "results kept in this browser" line on the current start screen.
+let refreshKept: () => void = () => {};
 
 /** The start-settings screen (the old DlgStart form) and the session flow behind its Start button. */
 export function showSetup(root: HTMLElement): void {
@@ -83,6 +85,7 @@ export function showSetup(root: HTMLElement): void {
           The results file <b>${CSV_FILE}</b> is kept ${canUseFolders ? 'in the same folder' : 'in this browser'}.</p>
         <div class="row">${pickButtons('samples')}</div>
         <p class="status" data-status="samples">No folder chosen.</p>
+        <p class="status kept" data-kept hidden></p>
       </fieldset>
 
       <fieldset class="panel tone-teal">
@@ -142,9 +145,34 @@ export function showSetup(root: HTMLElement): void {
   syncRefs();
 
   // ---- choosing files ----
+  /** Browser-only mode: say what is already kept in this browser for the chosen study. */
+  refreshKept = () => {
+    if (sources.samples) void showKept(sources.samples);
+  };
+
+  async function showKept(src: Source) {
+    const kept = q<HTMLElement>('[data-kept]');
+    const store = resultsFor(src);
+    kept.hidden = !store.inBrowser;
+    if (!store.readStored) return;
+    let stored: string[] | null;
+    try {
+      stored = await store.readStored();
+    } catch {
+      kept.textContent = 'The results kept in this browser for this study could not be read.';
+      return;
+    }
+    if (sources.samples !== src) return; // a different folder was chosen meanwhile
+    const { sessions, last } = summarize(stored);
+    kept.textContent = sessions
+      ? `Results kept in this browser for this study: ${sessions} session${sessions === 1 ? '' : 's'}${last ? `, last on ${last}` : ''}.`
+      : 'No results kept in this browser for this study yet.';
+  }
+
   function setSource(kind: SourceKind, src: Source | null) {
     sources[kind] = src;
     const status = q<HTMLElement>(`[data-status="${kind}"]`);
+    if (kind === 'samples' && !src) q<HTMLElement>('[data-kept]').hidden = true;
     if (!src) {
       status.textContent = 'No folder chosen.';
       return;
@@ -155,6 +183,7 @@ export function showSetup(root: HTMLElement): void {
         ? `Rating ${n} WAV file${n === 1 ? '' : 's'} in “${src.label}”.`
         : `Using ${n} WAV file${n === 1 ? '' : 's'} as reference in “${src.label}”.`;
     if (kind === 'samples' && src.csv) status.textContent += ` Found ${CSV_FILE} there.`;
+    if (kind === 'samples') void showKept(src);
     const reopen = form.querySelector<HTMLElement>(`[data-reopen="${kind}"]`);
     if (reopen) reopen.hidden = true;
   }
@@ -255,8 +284,9 @@ ${(e as Error).message}`);
     if (!file || !src) return;
     const ok = await yesNo(`Replace the results kept in this browser for “${src.label}” with “${file.name}”?`);
     if (ok === 'yes') {
-      await importBrowserResults(src.label, file);
+      await importBrowserResults(src, file);
       saved.textContent = `Imported ${file.name}.`;
+      void showKept(src);
     }
   });
 
@@ -311,6 +341,8 @@ ${(e as Error).message}`);
 
     let existing: string[] | null;
     try {
+      const choice = await chooseCopy(store, samples);
+      if (choice === 'cancel') return;
       existing = await store.read();
     } catch {
       return void alertBox(
@@ -358,6 +390,7 @@ ${(e as Error).message}`);
     );
     showSetup(root);
     await writeResults(root, store, lines, samples.dir);
+    refreshKept();
   }
 }
 
@@ -435,4 +468,45 @@ async function loadExamples(): Promise<{ samples: Source; refs: Source }> {
     samples: { ...sourceFromFiles(samples, 'samples'), label: 'Example files' },
     refs: { ...sourceFromFiles(refs, 'refs'), label: 'Example references' },
   };
+}
+
+/**
+ * Browser-only mode: if the chosen folder has a NeAR.csv and this browser also
+ * keeps results for the same study, and the two differ, ask which to carry on
+ * with rather than silently preferring the browser's copy. Choosing the folder's
+ * file replaces the browser's copy (which can be downloaded first).
+ */
+async function chooseCopy(store: ReturnType<typeof resultsFor>, samples: Source): Promise<'ok' | 'cancel'> {
+  if (!store.readStored || !samples.csv) return 'ok';
+  const stored = await store.readStored();
+  if (!stored) return 'ok';
+  const folder = parseLines(await samples.csv.text());
+  if (sameLines(stored, folder)) return 'ok';
+  const describe = (lines: string[]) => {
+    const { sessions, last } = summarize(lines);
+    return `${sessions} session${sessions === 1 ? '' : 's'}${last ? `, last on ${last}` : ''}`;
+  };
+  for (;;) {
+    const key = await ask(
+      'There are two different copies of the results for this study:\n\n' +
+        `  • ${CSV_FILE} in the folder you chose: ${describe(folder)}\n` +
+        `  • the copy kept in this browser: ${describe(stored)}\n\n` +
+        'Which one should NeAR carry on with? If you choose the folder’s file, the copy kept in this browser is ' +
+        'replaced, so download it first if you might need it.',
+      [
+        { label: 'Use the folder’s file', value: 'folder' as const },
+        { label: 'Use this browser’s copy', value: 'browser' as const, primary: true },
+        { label: 'Download browser’s copy', value: 'download' as const },
+        { label: 'Cancel', value: 'cancel' as const },
+      ],
+    );
+    if (key === 'cancel') return 'cancel';
+    if (key === 'browser') return 'ok';
+    if (key === 'download') {
+      downloadLines(stored, 'NeAR browser copy.csv');
+      continue;
+    }
+    await store.write(folder);
+    return 'ok';
+  }
 }

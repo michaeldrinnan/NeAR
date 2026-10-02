@@ -6,6 +6,8 @@ export interface AudioItem {
   /** Unique within a session ("s:" samples, "r:" references). */
   id: string;
   name: string;
+  /** Size in bytes, when known without opening the file (picked files). */
+  size?: number;
   getFile(): Promise<File>;
 }
 
@@ -86,7 +88,7 @@ export function sourceFromFiles(files: Iterable<File>, kind: SourceKind): Source
     if (parts.length > 2) continue;
     if (parts.length === 2) label ||= parts[0];
     if (isWav(file.name)) {
-      items.push({ id: prefix(kind) + file.name, name: file.name, getFile: async () => file });
+      items.push({ id: prefix(kind) + file.name, name: file.name, size: file.size, getFile: async () => file });
     } else if (file.name.toLowerCase() === CSV_FILE.toLowerCase()) {
       csv = file;
     }

@@ -86,9 +86,17 @@ test('a demo session with the example files saves the expected ranks', async ({ 
         const open = indexedDB.open('near');
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
-          const get = open.result.transaction('kv').objectStore('kv').get('results:Example files');
-          get.onsuccess = () => resolve(get.result as string[]);
-          get.onerror = () => reject(get.error);
+          // Browser-kept results are filed per study: "results:<folder name>:<fingerprint of its files>".
+          const store = open.result.transaction('kv').objectStore('kv');
+          const keys = store.getAllKeys();
+          keys.onerror = () => reject(keys.error);
+          keys.onsuccess = () => {
+            const key = (keys.result as string[]).filter((k) => k.startsWith('results:Example files:'));
+            if (key.length !== 1) return reject(new Error(`expected one example-files store, found ${key.length}`));
+            const get = store.get(key[0]);
+            get.onsuccess = () => resolve(get.result as string[]);
+            get.onerror = () => reject(get.error);
+          };
         };
       }),
   );
@@ -144,4 +152,68 @@ test('dragging to the edge of the window scrolls to boxes that are off screen', 
   await page.mouse.move(box.x + box.width - 30, box.y + 40, { steps: 10 }); // empty space beside the references
   await page.mouse.up();
   await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
+});
+
+// Playwright hands files over as Node buffers; declared here so the browser-side tsconfig needn't load Node's types.
+declare const Buffer: { from(data: string): unknown };
+
+/** "Choose files…" route (iPad, Safari, Firefox): every pick is labelled "Selected files". */
+async function pickFiles(page: Page, files: Record<string, string>) {
+  await page.locator('[data-input-files]').setInputFiles(
+    Object.entries(files).map(([name, body]) => ({
+      name,
+      mimeType: name.endsWith('.csv') ? 'text/csv' : 'audio/wav',
+      buffer: Buffer.from(body) as never,
+    })),
+  );
+}
+
+/** Rates nothing (unrated samples allowed) and saves, adding one session to the study's results. */
+async function quickSession(page: Page, rater: string) {
+  await page.locator('#rater').fill(rater);
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Finished rating' }).click();
+  await page.getByRole('button', { name: 'Yes' }).click();
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.locator('.saved')).toContainText('Saved to this browser');
+}
+
+test('browser-kept results are kept per study, summarised, and a differing NeAR.csv is asked about', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[name="canLeave"]').check();
+  const kept = page.locator('[data-kept]');
+  const studyA = { 'a1.wav': 'AAAA', 'a2.wav': 'AAAAAA' };
+  const studyB = { 'b1.wav': 'BBBB', 'b2.wav': 'BBBBBB' };
+
+  // (c) The start screen says what this browser already keeps for the chosen study.
+  await pickFiles(page, studyA);
+  await expect(kept).toHaveText('No results kept in this browser for this study yet.');
+  await quickSession(page, 'Rater 1');
+  await expect(kept).toHaveText(/^Results kept in this browser for this study: 1 session, last on \d{4}-\d{2}-\d{2}\.$/);
+
+  // (a) Another "Choose files…" pick is a different study, so it starts empty instead of sharing A's results.
+  await pickFiles(page, studyB);
+  await expect(kept).toHaveText('No results kept in this browser for this study yet.');
+  await pickFiles(page, studyA);
+  await expect(kept).toContainText('1 session');
+
+  // (b) The same study picked with a NeAR.csv that differs from the browser's copy: NeAR asks which to use.
+  const folderCsv = 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,a1.wav,a2.wav\r\nOld,2020-01-01,09:00:00,Lab,,0,1,2\r\nOlder,2020-01-02,09:00:00,Lab,,0,2,1\r\n';
+  await pickFiles(page, { ...studyA, 'NeAR.csv': folderCsv });
+  await page.locator('#rater').fill('Rater 2');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  const question = page.locator('dialog');
+  await expect(question).toContainText('two different copies');
+  await expect(question).toContainText('NeAR.csv in the folder you chose: 2 sessions, last on 2020-01-02');
+  await expect(question).toContainText('the copy kept in this browser: 1 session');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.rating')).toHaveCount(0);
+
+  // Choosing the folder's file carries on from it: its 2 sessions plus the new one.
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Use the folder’s file' }).click();
+  await page.getByRole('button', { name: 'Finished rating' }).click();
+  await page.getByRole('button', { name: 'Yes' }).click();
+  await page.getByRole('button', { name: 'Not now' }).click();
+  await expect(kept).toContainText('3 sessions');
 });

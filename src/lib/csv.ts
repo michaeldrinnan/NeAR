@@ -76,6 +76,18 @@ export function serializeLines(lines: readonly string[]): string {
   return lines.map((l) => l + '\r\n').join('');
 }
 
+/** Number of sessions (data rows) and the DATE of the most recent one, for a short summary. */
+export function summarize(lines: readonly string[] | null): { sessions: number; last: string | null } {
+  const rows = (lines ?? []).slice(1).filter((l) => l.trim() !== '');
+  const last = rows.length ? rows[rows.length - 1].split(',')[1]?.trim() || null : null;
+  return { sessions: rows.length, last };
+}
+
+/** True if two copies of a results file hold the same lines. */
+export function sameLines(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((l, i) => l === b[i]);
+}
+
 /** True if a data row (not the header) already uses exactly this rater ID. */
 export function raterUsed(lines: readonly string[], rater: string): boolean {
   return lines.slice(1).some((line) => line.split(',')[0] === rater);
