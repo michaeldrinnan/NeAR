@@ -120,7 +120,7 @@ test('Save as study writes a package with the files and settings that loads stra
 });
 
 test('a ?study= link opens that study when NeAR starts', async ({ page }) => {
-  await page.goto('/?study=examples/NeAR-examples.zip');
+  await page.goto('/?study=studies/example-files.zip');
   await expect(page.locator('[data-loaded]')).toContainText('Study: “Example files”, version 1');
   await expect(page.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
 });
@@ -145,4 +145,34 @@ test('a changed package is a different study with its own results; the same pack
   await expect(page.locator('[data-kept]')).toContainText('No results kept in this browser for “Versioned v2” yet.');
   await openStudy(page, v1);
   await expect(page.locator('[data-kept]')).toContainText('“Versioned v1”: 1 session');
+});
+
+test('the example study offered for download is a valid study package that opens with Open study…', async ({ page }) => {
+  await page.goto('/');
+  for (const choice of ['Example files: 8 voices with 5 references', 'Example: random order, no references']) {
+    await page.getByRole('combobox', { name: 'Example study' }).selectOption({ label: choice });
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name: 'download this example study (.zip)' }).click();
+    const file = await download;
+    await page.locator('[data-input-study]').setInputFiles(await file.path());
+    await expect(page.locator('dialog')).toHaveCount(0);
+    await expect(page.locator('[data-loaded]')).toContainText('Study: “Example');
+    await page.getByRole('button', { name: 'Close study' }).click();
+  }
+});
+
+test('example studies are chosen from a list; the choice decides what is loaded and what is fixed', async ({ page }) => {
+  await page.goto('/');
+  const list = page.getByRole('combobox', { name: 'Example study' });
+  await expect(list.locator('option')).toHaveText(['Example files: 8 voices with 5 references', 'Example: random order, no references']);
+  await list.selectOption({ label: 'Example: random order, no references' });
+  await page.getByRole('button', { name: 'Try with example files' }).click();
+  await expect(page.locator('[data-loaded]')).toContainText('Study: “Example: random order, no references”');
+  await expect(page.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
+  await expect(box(page, 'useRefs')).not.toBeChecked(); // no RefItems in this one
+  await expect(box(page, 'random')).toBeChecked();
+  await expect(box(page, 'random')).toBeDisabled();
+  await expect(box(page, 'numbers')).toBeChecked();
+  await expect(box(page, 'numbers')).toBeDisabled();
+  await expect(box(page, 'showCount')).toBeEnabled(); // left to the rater
 });

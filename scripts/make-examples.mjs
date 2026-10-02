@@ -208,8 +208,36 @@ writeFileSync(
     references: files.filter(([n]) => n.startsWith('RefItems/')).map(([n]) => n).sort(),
   }, null, 2) + '\n',
 );
+// Built-in example studies (public/studies/). The app lists them from public/studies/index.json,
+// which is edited by hand: to add an example, drop its zip in that folder and add a line there.
+const STUDIES = new URL('../public/studies/', import.meta.url);
+mkdirSync(STUDIES, { recursive: true });
 writeFileSync(
-  new URL('NeAR-examples.zip', OUT),
+  new URL('example-files.zip', STUDIES),
   zip([['study.txt', Buffer.from(study)], ...files, ['ANSWER-KEY.txt', Buffer.from(key)]]),
+);
+
+// A second example: the same voices with no references, in a random order for each rater,
+// labelled by number — showing settings a study fixes.
+const randomStudy = [
+  '# NeAR study definition: the example voices without references, in random order.',
+  '# random and numbers are fixed by this study; blank options can be changed by the rater.',
+  'title         = Example: random order, no references',
+  'version       = 1',
+  'instructions  = The same eight voices, in a different random order for each rater and labelled by number.',
+  'instructions  = Rank them from the clearest voice (top left) to the roughest.',
+  'random        = yes',
+  'numbers       = yes',
+  'names         = no',
+  'play_count    =',
+  'leave_unrated = no',
+  'animate       =',
+  `answer_key    = ${bestFirst.join(', ')}`,
+  'show_answers  = yes',
+  '',
+].join('\r\n');
+writeFileSync(
+  new URL('example-random.zip', STUDIES),
+  zip([['study.txt', Buffer.from(randomStudy)], ...files.filter(([n]) => n.startsWith('TestItems/'))]),
 );
 console.log(key);

@@ -107,8 +107,25 @@ let loaded: StudyPackage | null = null;
 // A ?study= link is opened once, when the app starts.
 let linkChecked = false;
 
-/** The bundled example files, as a built-in study package. */
-const EXAMPLE_STUDY_URL = 'examples/NeAR-examples.zip';
+/** Built-in example studies: public/studies/index.json lists them; the first is the default. */
+interface BuiltinStudy {
+  title: string;
+  file: string;
+}
+const BUILTIN_FALLBACK: BuiltinStudy[] = [{ title: 'Example files', file: 'example-files.zip' }];
+let builtinList: Promise<BuiltinStudy[]> | null = null;
+let builtinChoice = 0;
+function builtinStudies(): Promise<BuiltinStudy[]> {
+  builtinList ??= fetch(new URL('studies/index.json', document.baseURI))
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))))
+    .then((j: { studies?: BuiltinStudy[] }) => (j.studies?.length ? j.studies : BUILTIN_FALLBACK))
+    .catch(() => {
+      builtinList = null; // try again next time (e.g. once back online)
+      return BUILTIN_FALLBACK;
+    });
+  return builtinList;
+}
+const builtinUrl = (s: BuiltinStudy) => `studies/${s.file}`;
 
 /** The settings a session actually uses: the user's, with a loaded study's fixed options on top. */
 function effectiveSettings(settings: Settings): Settings {
@@ -159,9 +176,13 @@ export function showSetup(root: HTMLElement): void {
     <form class="setup" novalidate>
       <fieldset class="panel tone-rose demo">
         <legend>New to NeAR?</legend>
-        <div class="row"><button type="button" data-demo>Try with example files</button>
-          <a class="button" href="./manual/NeAR-user-manual.pdf" target="_blank" rel="noopener">Read the user manual</a></div>
-        <p class="status">You can also <a href="./examples/NeAR-examples.zip" download>download the example study (.zip)</a> to open later or share.</p>
+        <div class="row">
+          <select data-builtin aria-label="Example study"></select>
+          <button type="button" data-demo>Try with example files</button>
+          <a class="button" href="./manual/NeAR-user-manual.pdf" target="_blank" rel="noopener">Read the user manual</a>
+        </div>
+        <p class="status">You can also <a data-builtin-link href="./studies/example-files.zip" download>download this example study (.zip)</a>
+          to open later with Open study…, or to share.</p>
       </fieldset>
       <fieldset class="panel tone-green" data-study-panel>
         <legend>Study</legend>
@@ -429,11 +450,28 @@ export function showSetup(root: HTMLElement): void {
       message,
     );
 
+  // The example studies list, and the matching download link for the one selected.
+  const builtinSelect = q<HTMLSelectElement>('[data-builtin]');
+  const builtinLink = q<HTMLAnchorElement>('[data-builtin-link]');
+  void builtinStudies().then((list) => {
+    builtinSelect.replaceChildren(...list.map((s, i) => new Option(s.title, String(i))));
+    builtinChoice = Math.min(builtinChoice, list.length - 1);
+    builtinSelect.value = String(builtinChoice);
+    const sync = () => {
+      builtinChoice = Number(builtinSelect.value);
+      builtinLink.href = `./${builtinUrl(list[builtinChoice])}`;
+      builtinLink.download = list[builtinChoice].file;
+    };
+    builtinSelect.addEventListener('change', sync);
+    sync();
+  });
+
   form.querySelector<HTMLButtonElement>('[data-demo]')!.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
     btn.disabled = true;
     if (!raterInput.value) raterInput.value = 'Demo';
-    await openFromUrl(EXAMPLE_STUDY_URL, "Couldn't load the example files. Are you offline?", 'Example files loaded: press Start.');
+    const chosen = (await builtinStudies())[builtinChoice] ?? BUILTIN_FALLBACK[0];
+    await openFromUrl(builtinUrl(chosen), "Couldn't load the example study. Are you offline?", 'Example study loaded: press Start.');
     btn.disabled = false;
   });
 

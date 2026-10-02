@@ -31,11 +31,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         // Opening the manual or the examples zip is a navigation; don't answer it with the app shell.
-        navigateFallbackDenylist: [/\/manual\//, /\/examples\//, /\.pdf$/i],
+        navigateFallbackDenylist: [/\/manual\//, /\/examples\//, /\/studies\//, /\.pdf$/i],
         // Example study files are fetched on demand, then kept for offline demos.
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.includes('/examples/'),
+            urlPattern: ({ url }) => url.pathname.includes('/studies/') || url.pathname.includes('/examples/'),
             handler: 'NetworkFirst', // fresh after an update, cached for offline use
             options: { cacheName: 'near-examples' },
           },

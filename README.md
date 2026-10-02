@@ -38,10 +38,12 @@ example; **Save as study…** writes the current set-up as a package. Full speci
 
 ## Example files
 
-`public/examples/` holds a demo study: 8 synthetic “ah” vowels with increasing hoarseness to rate
-(`TestItems/`), 5 references (`RefItems/`), `study.txt` (with an answer key, shown after the session)
-and `ANSWER-KEY.txt`; `NeAR-examples.zip` is the same study as a package. The app's
-*Try with example files* button opens it. Regenerate them with `npm run examples`.
+Built-in example studies live in `public/studies/` and are listed in `public/studies/index.json`;
+the start screen offers them in a list (*Try with example files*), with a download link for each.
+To add one, drop its zip in that folder and add a line to `index.json`. The two bundled examples
+use 8 synthetic “ah” vowels with increasing hoarseness (one with 5 references, one in random order
+without), each with an answer key. `public/examples/` holds the same voices unpacked for the tests.
+Regenerate them with `npm run examples`.
 
 ## Browsers
 
@@ -101,7 +103,7 @@ RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,<sample 1>,<sample 2>,...
 - `src/ui/` — start screen and session flow (`setup.ts`), rating screen (`rating.ts`),
   drag and drop (`drag.ts`), dialogs, About box
 - `scripts/make-icons.mjs` — regenerates the PWA icons in `public/`
-- `scripts/make-examples.mjs` — regenerates the example audio, answer key and zip in `public/examples/`
+- `scripts/make-examples.mjs` — regenerates the example voices (`public/examples/`) and the example study zips (`public/studies/`)
 - `tests/` — unit tests (Vitest); `e2e/` — browser test of a whole session (Playwright)
 
 ## Deployment

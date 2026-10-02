@@ -263,3 +263,13 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   .tone-green  { --tone: #5fbf66; --tone-bg: #132a15; --tone-text: #a6e3aa; }
 }
 .study-form textarea { width: 100%; font: inherit; }
+
+.demo select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  max-width: 100%;
+}

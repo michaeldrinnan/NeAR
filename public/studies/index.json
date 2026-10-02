@@ -1,0 +1,7 @@
+{
+  "comment": "Built-in example studies offered on NeAR's start screen. To add one, put its .zip (see docs/study-format.md) in this folder and add a line below. The first is the default.",
+  "studies": [
+    { "title": "Example files: 8 voices with 5 references", "file": "example-files.zip" },
+    { "title": "Example: random order, no references", "file": "example-random.zip" }
+  ]
+}
