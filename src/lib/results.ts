@@ -1,5 +1,5 @@
 import { CSV_FILE, parseLines, serializeLines } from './csv';
-import { appendToStudy, readStudy, writeStudy } from './studies';
+import { commitStudy, readStudy, writeStudy } from './studies';
 import type { Source } from './sources';
 
 /** Where NeAR.csv lives: in the samples folder, or (without folder access) in this browser. */
@@ -12,8 +12,11 @@ export interface ResultsStore {
   write(lines: readonly string[]): Promise<void>;
   /** Browser-kept results only: what is stored for this study, ignoring any NeAR.csv found with the files. */
   readStored?(): Promise<string[] | null>;
-  /** Browser-kept results only: saves a finished session (last line) without losing rows another tab added meanwhile. */
-  append?(lines: readonly string[]): Promise<void>;
+  /**
+   * Browser-kept results only: saves a finished session, but only if the stored results are still
+   * what the last read() saw. Resolves with the lines committed.
+   */
+  commit?(lines: readonly string[]): Promise<string[]>;
 }
 
 export function resultsFor(source: Source): ResultsStore {
@@ -48,20 +51,26 @@ function browserResults(source: Source): ResultsStore {
   if (!id) throw new Error('Choose a browser study first.');
   const seed = source.csv;
   const readStored = async () => (await readStudy(id)).lines;
+  // What the stored results were when this session read them, for commit() to check against.
+  let seen: string[] | null | undefined;
   return {
     where: `this browser (results for “${source.label}”)`,
     inBrowser: true,
     readStored,
     async read() {
       const stored = await readStored();
+      seen = stored ? [...stored] : null; // a copy: the caller appends its new row to the array it gets back
       if (stored) return stored;
       return seed ? parseLines(await seed.text()) : null;
     },
     async write(lines) {
       await writeStudy(id, lines);
     },
-    async append(lines) {
-      await appendToStudy(id, lines);
+    async commit(lines) {
+      if (seen === undefined) throw new Error('The results were not read before saving.');
+      const committed = await commitStudy(id, lines, seen);
+      seen = committed;
+      return committed;
     },
   };
 }

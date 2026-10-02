@@ -68,6 +68,26 @@ const sources: Record<SourceKind, Source | null> = { samples: null, refs: null }
 let rater = '';
 // Shared across replacement forms, through rating and the complete save/recovery flow.
 let sessionBusy = false;
+
+const SESSION_ACTIVE = 'A session is already active in another NeAR window. Finish or close it before continuing.';
+
+/**
+ * One NeAR operation at a time across every window and tab of this browser: reading results,
+ * rating and saving, as well as imports, downloads, deletions and clean-up. The browser
+ * releases the lock by itself if the window holding it closes or crashes. Browsers without
+ * the Web Locks API fall back to the single-window guard plus commit()'s conflict check.
+ */
+async function withSessionLock(action: () => Promise<void>): Promise<'done' | 'busy'> {
+  if (!navigator.locks) {
+    await action();
+    return 'done';
+  }
+  return navigator.locks.request('near-session', { ifAvailable: true }, async (lock) => {
+    if (!lock) return 'busy' as const;
+    await action();
+    return 'done' as const;
+  });
+}
 // Refreshes the "results kept in this browser" line on the current start screen.
 let refreshKept: () => void = () => {};
 
@@ -144,7 +164,7 @@ export function showSetup(root: HTMLElement): void {
     form.inert = true;
     q<HTMLButtonElement>('.start').disabled = true;
     try {
-      await action();
+      if ((await withSessionLock(action)) === 'busy') await alertBox(SESSION_ACTIVE);
     } catch (e) {
       await alertBox(`Couldn't complete this action.\n\n${(e as Error).message}`);
     } finally {
@@ -480,7 +500,9 @@ async function writeResults(
   };
   for (;;) {
     try {
-      await (store.append ? store.append(lines) : store.write(lines));
+      let committed: readonly string[] = lines;
+      if (store.commit) committed = await store.commit(lines);
+      else await store.write(lines);
       status(`Saved to ${store.where} at ${new Date().toLocaleTimeString()}.`);
       if (store.inBrowser) {
         const key = await ask(
@@ -490,7 +512,7 @@ async function writeResults(
             { label: 'Not now', value: 'no' },
           ],
         );
-        if (key === 'yes') downloadLines(lines, CSV_FILE);
+        if (key === 'yes') downloadLines(committed, CSV_FILE); // exactly what was saved
       }
       return;
     } catch (e) {

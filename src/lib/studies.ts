@@ -89,22 +89,34 @@ export async function writeStudy(id: string, lines: readonly string[]): Promise<
   });
 }
 
+/** Raised when a study's results changed after a session read them; nothing is overwritten. */
+export class StudyConflictError extends Error {
+  constructor() {
+    super(
+      'The results for this study were changed elsewhere (in another NeAR window or tab) while this session was ' +
+        'running, so they have not been overwritten. Save this session’s results elsewhere and combine them by hand.',
+    );
+    this.name = 'StudyConflictError';
+  }
+}
+
+const same = (a: readonly string[] | null, b: readonly string[] | null) => sameLines(a ?? [], b ?? []);
+
 /**
- * Saves a finished session. `lines` is the results file as read when the session
- * started plus the new row at the end. Inside one transaction: if nothing changed
- * meanwhile, store it as is; if another tab has added sessions to the same file
- * since, append just the new row to what is there now, so neither session is lost.
- * (If the header differs, this session deliberately started a fresh file.)
+ * Saves a finished session: `lines` replaces the study's results only if they are
+ * still exactly `expected` (what the session read when it started); otherwise it
+ * raises StudyConflictError and changes nothing. One NeAR session runs at a time
+ * (see the session lock), so this is a safety net that never merges or overwrites.
+ * Resolves with the lines committed.
  */
-export async function appendToStudy(id: string, lines: readonly string[]): Promise<void> {
-  const base = lines.slice(0, -1);
-  const row = lines[lines.length - 1];
+export async function commitStudy(id: string, lines: readonly string[], expected: readonly string[] | null): Promise<string[]> {
+  const committed = [...lines];
   await kvUpdate<Study>(key(id), (study) => {
     if (!study) throw missing();
-    const now = study.lines;
-    const merged = !now || !now.length || sameLines(now, base) || now[0] !== lines[0] ? [...lines] : [...now, row];
-    return { put: { ...study, lines: merged } };
+    if (!same(study.lines, expected)) throw new StudyConflictError();
+    return { put: { ...study, lines: committed } };
   });
+  return committed;
 }
 
 /** The built-in study for the bundled example files, created on first use. */

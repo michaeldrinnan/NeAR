@@ -467,3 +467,78 @@ test('the demo uses its own built-in study, not a user study with the same name 
   expect(builtin[0].lines).toHaveLength(2); // header + the demo session
   expect(own[0].lines).toBeNull(); // the user's own study is untouched
 });
+
+test('only one NeAR session runs at a time across windows, and the download after saving matches what was saved', async ({ context }) => {
+  const busy = 'A session is already active in another NeAR window. Finish or close it before continuing.';
+  const [a, b] = [await context.newPage(), await context.newPage()];
+  for (const p of [a, b]) {
+    await p.goto('/');
+    await p.locator('input[name="canLeave"]').check();
+    await p.getByRole('button', { name: 'Try with example files' }).click();
+    await expect(p.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
+  }
+
+  // Window A starts a session and holds it.
+  await a.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(a.locator('.rating')).toHaveCount(1);
+
+  // Window B can't start, download, import or change studies meanwhile.
+  const refused = async (act: () => Promise<void>) => {
+    await act();
+    await expect(b.locator('dialog')).toContainText(busy);
+    await b.getByRole('button', { name: 'OK' }).click();
+  };
+  await refused(() => b.getByRole('button', { name: 'Start', exact: true }).click());
+  await refused(() => b.getByRole('button', { name: 'Download NeAR.csv' }).click());
+  await refused(() => b.locator('[data-study]').click());
+  await refused(() =>
+    b.locator('[data-input-csv]').setInputFiles({ name: 'NeAR.csv', mimeType: 'text/csv', buffer: Buffer.from('RATER,DATE\r\n') as never }),
+  );
+  await expect(b.locator('.rating')).toHaveCount(0);
+
+  // A finishes and takes the offered download: it is exactly what was saved.
+  await a.evaluate(() => {
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob: Blob) => {
+      void blob.text().then((t) => ((window as unknown as { lastDownload: string }).lastDownload = t));
+      return original(blob);
+    };
+  });
+  await a.getByRole('button', { name: 'Finished rating' }).click();
+  await a.getByRole('button', { name: 'Yes' }).click();
+  await a.getByRole('button', { name: 'Download' }).click();
+  await expect(a.locator('.saved')).toContainText('Saved to this browser');
+  const downloaded = await a.waitForFunction(() => (window as unknown as { lastDownload?: string }).lastDownload).then((h) => h.jsonValue());
+  const stored = await a.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const open = indexedDB.open('near');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const all = open.result.transaction('kv').objectStore('kv').getAll();
+          all.onsuccess = () => resolve((all.result as { builtin?: string; lines: string[] }[]).find((v) => v?.builtin === 'examples')!.lines);
+          all.onerror = () => reject(all.error);
+        };
+      }),
+  );
+  expect(downloaded).toBe(stored.map((l) => l + '\r\n').join(''));
+
+  // Now that A has finished, B can start (as a different rater, to skip the "already used" question).
+  await b.locator('#rater').fill('Demo B');
+  await b.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(b.locator('.rating')).toHaveCount(1);
+});
+
+test('closing the window that holds a session frees it for other windows', async ({ context }) => {
+  const [a, b] = [await context.newPage(), await context.newPage()];
+  for (const p of [a, b]) {
+    await p.goto('/');
+    await p.getByRole('button', { name: 'Try with example files' }).click();
+    await expect(p.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
+  }
+  await a.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(a.locator('.rating')).toHaveCount(1);
+  await a.close({ runBeforeUnload: false });
+  await b.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(b.locator('.rating')).toHaveCount(1);
+});
