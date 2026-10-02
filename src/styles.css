@@ -198,30 +198,17 @@ th, td { text-align: left; padding: 10px 12px; border-top: 1px solid var(--borde
 th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
 
 /* ---- Rating screen ---- */
-.sessbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
-.sessbar .t { flex: 1; min-width: 0; }
-.sess { display: grid; gap: 4px; }
+.sess { display: grid; gap: 6px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border); }
 .sess label { font-weight: 700; }
 .sess input { width: 18rem; font-size: 1.1rem; border: 2px solid var(--rate); }
-.instr { padding: 12px 14px; border-radius: 6px; background: var(--well); display: grid; gap: 4px; }
+.how { display: grid; gap: 6px; }
+.how h2 { font-size: 1rem; }
 .study-title { overflow-wrap: anywhere; }
+.study-info { display: grid; gap: 10px; white-space: normal; }
+.study-info h1 { font-size: 1.3rem; }
 
-.rating { display: grid; gap: 6px; }
-.rating .hint { color: var(--muted); }
-.rating .best { font-weight: 700; margin-top: 4px; }
-.board { position: relative; display: grid; gap: 6px; }
-.board .lockmsg { display: none; }
-.board[data-locked='true'] > :not(.lockmsg) { opacity: 0.25; filter: grayscale(1); }
-.board[data-locked='true'] .lockmsg {
-  display: grid;
-  place-items: center;
-  position: absolute;
-  inset: 0;
-  padding: 16px;
-  font-size: 1.15rem;
-  font-weight: 700;
-  text-align: center;
-}
+.rating { display: grid; gap: 12px; }
+.instr { padding: 12px 14px; border-radius: 6px; background: var(--well); display: grid; gap: 4px; }
 .box {
   display: flex;
   flex-wrap: wrap;
@@ -287,10 +274,10 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
 }
 .play:hover { background: #fff; }
 
-.rating-bar { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
-.rating-bar .count { flex: 1; font-weight: 700; }
-.player { display: grid; gap: 4px; color: var(--muted); }
-.player audio { width: 100%; }
+/* The rating screen's one slim bar: Back, Study info, the player, the count, Save and finish. */
+.rating-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.rating-bar audio { flex: 1; min-width: 220px; height: 40px; }
+.rating-bar .count { font-weight: 700; white-space: nowrap; }
 .check { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .check input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
 
@@ -324,5 +311,5 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
   :root { --tile: 80px; }
   main { padding: 16px 16px 40px; }
   .sess input { width: 100%; }
-  .sess { flex-basis: 100%; }
+
 }

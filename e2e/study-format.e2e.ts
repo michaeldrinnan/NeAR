@@ -111,7 +111,6 @@ test('Create: Save as zip makes a study that opens with the same code; Try it no
   await expect(page.locator('.study-title')).toHaveText('Zipped');
   await expect(page.locator('.meta')).toHaveText(`3 voices · 1 reference · study #${code}`);
   await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: 'Leave without saving' }).click();
   await expect(page.locator('#study-title')).toHaveValue('Zipped');
 
   const download = page.waitForEvent('download');
@@ -193,7 +192,6 @@ test('a ?study= link goes straight to that study; Back then leads to Rate a stud
   await page.goto('/?study=studies/example-no-references.zip');
   await expect(page.locator('.study-title')).toHaveText('Example: no references');
   await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: 'Leave without saving' }).click();
   await expect(page.getByRole('heading', { name: 'Which study are you rating?' })).toBeVisible();
 });
 
@@ -216,7 +214,6 @@ test('a changed study is a different study with its own results; the same study 
   const entries = unzipSync(bytes);
   entries['study.txt'] = strToU8(new TextDecoder().decode(entries['study.txt']).replace('title         = Example: no references', 'title = Edited: a/b?'));
   await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: 'Leave without saving' }).click();
   await page.locator('input[type="file"][accept*="zip"]').setInputFiles({ name: 'edited.zip', mimeType: 'application/zip', buffer: Buffer.from(zipSync(entries)) as never });
   await expect(page.locator('.study-title')).toHaveText('Edited: a/b?');
   await expect(page.locator('.results-note')).toContainText('No sessions saved yet'); // a different study

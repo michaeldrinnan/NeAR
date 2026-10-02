@@ -110,13 +110,23 @@ straight to the study. Best effort: the server holding the zip must allow downlo
 other web sites (CORS). Links to files on the NeAR site itself (e.g.
 `?study=studies/example-files.zip`) always work.
 
-Opening a study goes straight to the **rating screen**: the title, what it holds, the
-instructions and where results go, then a required **Session name** box. The tiles, the
-Play buttons and *Save and finish* stay locked until a name is entered (a name containing a
-comma keeps them locked, with a note). *Back* always asks *Leave this rating session?*, with
-*Keep rating* as the default (Escape keeps rating too) and *Leave without saving* in red;
-closing or reloading the tab mid-session triggers the browser's own warning. After saving,
-*Start another session* rates the same study again.
+Every way of opening a study (examples, carry on, recent studies, a file, a folder, a link,
+*Try it now*) leads to its **Study info** screen: the title, what it holds, the instructions,
+how to rate, where results go, the rater's *Animate* preference, and a required **Session
+name**. *Start rating* stays unavailable until a name is entered (a name containing a comma
+is refused, with a note). *Back* there returns to wherever the study was opened from.
+
+The **rating screen** itself is one slim bar (*Back*, *Study info*, the player, the count and
+*Save and finish*), the instructions, and the two boxes (rated above, unrated below, as in 2012).
+
+- The session name is fixed once rating has started, so the saved row always carries the name
+  the session started with. *Study info* shows the same information read-only, and *Return to
+  rating* leaves every tile where it was.
+- *Back* always asks *Leave this rating session?*, with *Keep rating* as the default (Escape
+  keeps rating too) and *Leave without saving* in red; closing or reloading the tab mid-session
+  triggers the browser's own warning.
+- After saving, *Start another session* returns to Study info with the name filled in, to keep
+  or change.
 
 ## 4. Creating or editing a study
 

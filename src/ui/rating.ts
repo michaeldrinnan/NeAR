@@ -26,60 +26,63 @@ function setAnimatePreference(on: boolean) {
   }
 }
 
+/** The tick box for the animation preference, shown on the Study info screen. */
+export function animateCheckbox(): HTMLLabelElement {
+  const label = document.createElement('label');
+  label.className = 'check animate-pref';
+  label.innerHTML = `<input type="checkbox" name="animate">
+    <span>Animate the samples as they are moved. Untick if movement on screen is uncomfortable.</span>`;
+  const box = label.querySelector('input')!;
+  box.checked = animatePreference();
+  box.addEventListener('change', () => setAnimatePreference(box.checked));
+  return label;
+}
+
 export interface RatingSession {
   /** Resolves with the final contents of the rated box, best first, references included, once the rater finishes. */
   done: Promise<string[]>;
-  /** Locks the board (no playing, dragging or finishing), e.g. until a session name is entered. */
-  setLocked(locked: boolean, message?: string): void;
   /** Ends the session without saving (Back). */
   stop(): void;
 }
 
 /**
- * Runs one rating session (the old RaterInterface window) in `root`. `beforeFinish`
- * is asked first when the rater presses Save and finish; returning false carries on rating.
+ * Runs one rating session (the old RaterInterface window) in `root`: a slim bar (Back, Study
+ * info, the player, Save and finish), the instructions, and the two boxes. `beforeFinish` is
+ * asked first when the rater presses Save and finish; returning false carries on rating.
  */
 export function runRating(
   root: HTMLElement,
   samples: readonly AudioItem[],
   refs: readonly AudioItem[] | null,
-  opts: StudyOptions,
+  opts: StudyOptions & { instructions: readonly string[]; onBack(): void; onInfo(): void },
   beforeFinish: () => Promise<boolean> = async () => true,
 ): RatingSession {
   root.innerHTML = `
     <section class="rating">
-      <p class="hint">In the top box you should arrange the rated samples. Click <b>Play</b> to listen,
-        then drag them around until you are happy with the order.
-        ${refs ? 'The plain blue samples are references; their order cannot be changed.' : ''}</p>
-      <div class="board" data-locked="true">
-        <p class="best">Put the BEST sample here at top left.</p>
-        <div class="box rated" aria-label="Rated samples"></div>
-        <p class="hint">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
-        <div class="box unrated" aria-label="Unrated samples"></div>
-        <div class="lockmsg"><span></span></div>
-      </div>
       <div class="rating-bar">
+        <button type="button" class="back">← Back</button>
+        <button type="button" class="info">Study info</button>
+        <audio controls preload="auto" aria-label="Player"></audio>
         <span class="count" aria-live="polite"></span>
         <button type="button" class="primary finish">Save and finish</button>
       </div>
-      <div class="player">
-        <span class="now-playing">Use the player to pause, seek or change the volume.</span>
-        <audio controls preload="auto"></audio>
-      </div>
-      <label class="check animate-pref"><input type="checkbox" name="animate">
-        <span>Animate the samples as they are moved. Untick if movement on screen is uncomfortable.</span></label>
+      <div class="instr rating-instr"></div>
+      <div class="box rated" aria-label="Rated samples, best at top left"></div>
+      <div class="box unrated" aria-label="Unrated samples"></div>
     </section>`;
 
-  const board = root.querySelector<HTMLElement>('.board')!;
+  const instr = root.querySelector<HTMLElement>('.rating-instr')!;
+  const lines = opts.instructions.length
+    ? opts.instructions
+    : ['Put the best sample at the top left of the upper box. The lower box holds the samples still to rate.'];
+  for (const line of lines) instr.append(Object.assign(document.createElement('p'), { textContent: line }));
+  root.querySelector('.back')!.addEventListener('click', () => opts.onBack());
+  root.querySelector('.info')!.addEventListener('click', () => opts.onInfo());
   const ratedBox = root.querySelector<HTMLElement>('.rated')!;
   const unratedBox = root.querySelector<HTMLElement>('.unrated')!;
   const countLabel = root.querySelector<HTMLElement>('.count')!;
   const finishBtn = root.querySelector<HTMLButtonElement>('.finish')!;
   const audio = root.querySelector('audio')!;
-  const nowPlaying = root.querySelector<HTMLElement>('.now-playing')!;
-  const animateBox = root.querySelector<HTMLInputElement>('input[name="animate"]')!;
-  animateBox.checked = animatePreference();
-  animateBox.addEventListener('change', () => setAnimatePreference(animateBox.checked));
 
   const urls = new Map<string, string>();
   const playing = { id: '' };
@@ -98,7 +101,7 @@ export function runRating(
       if (playing.id === item.id) audio.currentTime = 0;
       else audio.src = url;
       playing.id = item.id;
-      nowPlaying.textContent = label ? `Playing: ${label}` : 'Playing';
+      audio.title = label ? `Playing: ${label}` : 'Playing';
       await audio.play();
     } catch (e) {
       if (request !== playRequest || (e as DOMException).name === 'AbortError') return; // superseded by another Play
@@ -158,7 +161,7 @@ export function runRating(
   };
   updateCount();
 
-  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, () => animateBox.checked);
+  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, animatePreference);
 
   const warnOnLeave = (e: BeforeUnloadEvent) => e.preventDefault();
   window.addEventListener('beforeunload', warnOnLeave);
@@ -175,17 +178,6 @@ export function runRating(
     urls.forEach((u) => URL.revokeObjectURL(u));
   }
 
-  function setLocked(locked: boolean, message = 'Enter a session name above to start rating') {
-    board.dataset.locked = String(locked);
-    board.inert = locked;
-    board.querySelector('.lockmsg span')!.textContent = message;
-    finishBtn.disabled = locked;
-    if (locked) {
-      playRequest++;
-      audio.pause();
-    }
-  }
-  setLocked(true);
 
   const done = new Promise<string[]>((resolve) => {
     finishBtn.addEventListener('click', async (e) => {
@@ -215,5 +207,5 @@ export function runRating(
     });
   });
 
-  return { done, setLocked, stop: end };
+  return { done, stop: end };
 }

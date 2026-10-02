@@ -5,7 +5,7 @@ import { studyId } from '../lib/studies';
 import { audioItems, type OpenStudy } from '../lib/sources';
 import { ratingOptions, sourceLabel, studyCode, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
-import { runRating } from './rating';
+import { animateCheckbox, runRating } from './rating';
 import { el, page } from './page';
 
 export const SESSION_ACTIVE = 'A session is already active in another NeAR window. Finish or close it before continuing.';
@@ -45,26 +45,31 @@ const sessions = (lines: readonly string[] | null) => {
 };
 
 /**
- * Opens a study on the rating screen: a session name, then rating, then saving. `back`
- * returns to wherever the study was opened from. `remember` adds it to Recent studies.
+ * Opens a study: the Study info screen (with the session name), then rating, then saving. `back`
+ * returns to wherever the study was opened from. `remember` adds it to Recent studies; `preset`
+ * fills in the session name (Start another session).
  */
-export async function rateStudy(root: HTMLElement, study: OpenStudy, back: () => void, remember = true): Promise<void> {
+export async function rateStudy(root: HTMLElement, study: OpenStudy, back: () => void, remember = true, preset = ''): Promise<void> {
+  let rater = preset;
   let message = '';
   const outcome = await withSessionLock(async () => {
     const store = resultsFor(study);
     const lines = await prepareResults(store, study);
     if (!lines) return 'cancelled' as const;
     if (remember) await rememberStudy(study).catch(() => {}); // a convenience: never stops a session
-    const ranked = await ratingPage(root, study, store, lines);
-    if (!ranked) return 'left' as const;
+    const name = await infoPage(root, study, store, lines, preset);
+    if (name === null) return 'left' as const;
+    rater = name;
+    const box = await ratingPage(root, study, store, lines, rater);
+    if (!box) return 'left' as const;
     lines.push(
       buildRow({
-        rater: ranked.rater,
+        rater,
         when: new Date(), // time the session finished, as before
         source: sourceLabel(study.definition.title, study.identity),
         reference: study.references.length ? 'Ref' : null,
         nrefs: study.references.length,
-        ranks: computeRanks(study.samples.map((s) => 's:' + s.name), ranked.box),
+        ranks: computeRanks(study.samples.map((s) => 's:' + s.name), box),
       }),
     );
     root.replaceChildren(page([el('section', { className: 'panel tone-rate', 'aria-live': 'polite' }, [el('p', { textContent: 'Saving results…' })])]));
@@ -97,7 +102,7 @@ export async function rateStudy(root: HTMLElement, study: OpenStudy, back: () =>
     ]),
   );
   backBtn.addEventListener('click', back);
-  again.addEventListener('click', () => void rateStudy(root, study, back, false));
+  again.addEventListener('click', () => void rateStudy(root, study, back, false, rater));
   again.focus();
 }
 
@@ -183,83 +188,125 @@ async function prepareResults(store: ResultsStore, study: OpenStudy): Promise<st
   }
 }
 
-/**
- * The rating screen: study title and instructions, a session name that must be entered
- * before the tiles unlock, the board, and Back (which asks first). Resolves with the
- * session name and the rated box, or null if the rater left without saving.
- */
-function ratingPage(root: HTMLElement, study: OpenStudy, store: ResultsStore, lines: readonly string[]): Promise<{ rater: string; box: string[] } | null> {
+/** Everything about a study a rater may want to know: shown on the Study info screen and in its dialog. */
+function studyInfo(study: OpenStudy, store: ResultsStore, lines: readonly string[]): HTMLElement[] {
   const { definition: def } = study;
   const n = study.samples.length;
   const r = study.references.length;
-  const back = el('button', { type: 'button', className: 'big back', textContent: '← Back' });
-  const name = el('input', { id: 'rater', type: 'text', placeholder: 'Type a name to begin', autocomplete: 'off', spellcheck: false });
-  const nameNote = el('p', { className: 'field-note', hidden: true });
-  const instructions = el('div', { className: 'instr', hidden: !def.instructions.length }, def.instructions.map((t) => el('p', { textContent: t })));
   const { sessions: saved } = summarize(lines);
-  const resultsNote = store.inBrowser
-    ? `Results are kept in this browser as ${store.fileName}.`
-    : `Results are saved to ${store.where}.`;
-  const host = el('div');
-  root.replaceChildren(
-    page([
-      el('nav', { className: 'nav' }, [back]),
-      el('section', { className: 'panel tone-rate study-head' }, [
-        el('div', { className: 'sessbar' }, [
-          el('div', { className: 't' }, [
-            el('h1', { className: 'study-title', textContent: def.title }),
-            el('p', {
-              className: 'muted meta',
-              textContent: `${n} voices · ${r ? `${r} reference${r === 1 ? '' : 's'}` : 'no references'} · study #${studyCode(study.identity)}`,
-            }),
-          ]),
-          el('div', { className: 'sess' }, [el('label', { htmlFor: 'rater', textContent: 'Session name' }), name, nameNote]),
-        ]),
-        instructions,
-        el('p', { className: 'note results-note', textContent: `${resultsNote} ${saved ? `${sessions(lines)} so far.` : 'No sessions saved yet.'}` }),
-        el('p', { className: 'note warnings', hidden: !study.warnings.length, textContent: study.warnings.join(' ') }),
-      ]),
-      host,
+  const resultsNote = store.inBrowser ? `Results are kept in this browser as ${store.fileName}.` : `Results are saved to ${store.where}.`;
+  return [
+    el('h1', { className: 'study-title', textContent: def.title }),
+    el('p', {
+      className: 'muted meta',
+      textContent: `${n} voices · ${r ? `${r} reference${r === 1 ? '' : 's'}` : 'no references'} · study #${studyCode(study.identity)}`,
+    }),
+    el('div', { className: 'instr', hidden: !def.instructions.length }, def.instructions.map((t) => el('p', { textContent: t }))),
+    el('div', { className: 'how' }, [
+      el('h2', { textContent: 'How to rate' }),
+      el('p', {
+        textContent:
+          'Click Play on a sample to listen, then drag it into the upper box. Arrange the samples there with the BEST at the top left, ' +
+          'and move them around until you are happy with the order. The lower box holds the samples still to rate, and any you are not sure about.' +
+          (r ? ' The plain blue samples are references; their order cannot be changed.' : ''),
+      }),
+      el('p', { textContent: 'When you have finished, press Save and finish.' }),
     ]),
-  );
+    el('p', { className: 'note results-note', textContent: `${resultsNote} ${saved ? `${sessions(lines)} so far.` : 'No sessions saved yet.'}` }),
+    el('p', { className: 'note warnings', hidden: !study.warnings.length, textContent: study.warnings.join(' ') }),
+    animateCheckbox(),
+  ];
+}
 
-  const nameProblem = () => {
-    const v = name.value.trim();
-    if (!v) return 'empty';
-    if (v.includes(',')) return 'A session name can’t contain a comma: programs such as Excel would read it as two columns.';
-    return null;
-  };
-  const session = runRating(host, audioItems(study.samples, 's:'), r ? audioItems(study.references, 'r:') : null, ratingOptions(def), async () => {
-    if (nameProblem()) return false;
-    if (raterUsed(lines, name.value.trim())) {
-      return (await yesNo('This session name has already been used for this study.\nAre you sure you want to continue?')) === 'yes';
-    }
-    return true;
-  });
-  name.addEventListener('input', () => {
-    const problem = nameProblem();
+const nameProblem = (value: string) => {
+  const v = value.trim();
+  if (!v) return 'empty';
+  if (v.includes(',')) return 'A session name can’t contain a comma: programs such as Excel would read it as two columns.';
+  return null;
+};
+
+/**
+ * The Study info screen every study opens on: what the study is, how to rate, where results go,
+ * and the session name, which must be entered before Start rating. Resolves with the name, or
+ * null for Back (to wherever the study was opened from).
+ */
+function infoPage(root: HTMLElement, study: OpenStudy, store: ResultsStore, lines: readonly string[], preset: string): Promise<string | null> {
+  const back = el('button', { type: 'button', className: 'big back', textContent: '← Back' });
+  const name = el('input', { id: 'rater', type: 'text', placeholder: 'Type a name to begin', autocomplete: 'off', spellcheck: false, value: preset });
+  const nameNote = el('p', { className: 'field-note', hidden: true });
+  const start = el('button', { type: 'submit', className: 'primary big', textContent: 'Start rating' });
+  const form = el('form', { className: 'sess' }, [
+    el('label', { htmlFor: 'rater', textContent: 'Session name' }),
+    el('div', { className: 'row' }, [name, start]),
+    nameNote,
+  ]);
+  root.replaceChildren(page([el('nav', { className: 'nav' }, [back]), el('section', { className: 'panel tone-rate study-head' }, [...studyInfo(study, store, lines), form])]));
+  const check = () => {
+    const problem = nameProblem(name.value);
     nameNote.hidden = problem === null || problem === 'empty';
     nameNote.textContent = problem && problem !== 'empty' ? problem : '';
-    session.setLocked(problem !== null, problem === 'empty' || problem === null ? undefined : 'Correct the session name above to carry on rating');
-  });
+    start.disabled = problem !== null;
+  };
+  name.addEventListener('input', check);
+  check();
   name.focus();
-
   return new Promise((resolve) => {
-    back.addEventListener('click', async () => {
-      const key = await ask(
-        'Your ranking hasn’t been saved. If you leave now, it will be lost.',
-        [
-          { label: 'Keep rating', value: 'keep' as const, primary: true },
-          { label: 'Leave without saving', value: 'leave' as const, danger: true },
-        ],
-        'Leave this rating session?',
-        'keep',
-      );
-      if (key !== 'leave') return;
-      session.stop();
-      resolve(null);
+    back.addEventListener('click', () => resolve(null));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!nameProblem(name.value)) resolve(name.value.trim());
     });
-    void session.done.then((box) => resolve({ rater: name.value.trim(), box }));
+  });
+}
+
+/**
+ * The rating screen: a slim bar (Back, which asks first; Study info; the player; Save and finish),
+ * the instructions and the two boxes. Resolves with the rated box, or null if the rater left.
+ */
+function ratingPage(root: HTMLElement, study: OpenStudy, store: ResultsStore, lines: readonly string[], rater: string): Promise<string[] | null> {
+  const r = study.references.length;
+  return new Promise((resolve) => {
+    const host = el('div', { className: 'page' });
+    root.replaceChildren(host);
+    window.scrollTo(0, 0);
+    const session = runRating(
+      host,
+      audioItems(study.samples, 's:'),
+      r ? audioItems(study.references, 'r:') : null,
+      {
+        ...ratingOptions(study.definition),
+        instructions: study.definition.instructions,
+        async onBack() {
+          const key = await ask(
+            'Your ranking hasn’t been saved. If you leave now, it will be lost.',
+            [
+              { label: 'Keep rating', value: 'keep' as const, primary: true },
+              { label: 'Leave without saving', value: 'leave' as const, danger: true },
+            ],
+            'Leave this rating session?',
+            'keep',
+          );
+          if (key !== 'leave') return;
+          session.stop();
+          resolve(null);
+        },
+        onInfo() {
+          // The same information, read-only: the session name is fixed once rating has started.
+          const body = el('div', { className: 'study-info' }, [
+            ...studyInfo(study, store, lines),
+            el('p', { className: 'sess-fixed' }, ['Session name: ', el('strong', { textContent: rater })]),
+          ]);
+          void ask(body, [{ label: 'Return to rating', value: 'ok', primary: true }], 'Study info');
+        },
+      },
+      async () => {
+        if (raterUsed(lines, rater)) {
+          return (await yesNo(`The session name “${rater}” has already been used for this study.\nAre you sure you want to continue?`)) === 'yes';
+        }
+        return true;
+      },
+    );
+    void session.done.then(resolve);
   });
 }
 

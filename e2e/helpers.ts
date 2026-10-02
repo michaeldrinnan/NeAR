@@ -33,10 +33,11 @@ export async function openExample(page: Page, index = 0) {
   await expect(page.locator('#rater')).toBeVisible();
 }
 
-/** Types a session name, which unlocks the board. */
+/** On the Study info screen: types a session name and starts rating. */
 export async function name(page: Page, rater: string) {
   await page.locator('#rater').fill(rater);
-  await expect(page.locator('.board')).toHaveAttribute('data-locked', 'false');
+  await page.getByRole('button', { name: 'Start rating' }).click();
+  await expect(page.locator('.rating')).toBeVisible();
 }
 
 /** Presses Save and finish and confirms. */

@@ -18,24 +18,27 @@ test('a demo session with the example study saves the expected ranks', async ({ 
   await expect(page.locator('.bar h2')).toHaveText(['New to NeAR?', 'Create a study', 'Rate a study', 'Results']);
   await openExample(page);
 
-  // The rating screen: the study's title, what it holds, and its instructions; no options.
+  // The Study info screen: the study's title, what it holds, its instructions, how to rate, where results go; no options.
   await expect(page.locator('.study-title')).toHaveText('Example files');
   await expect(page.locator('.meta')).toHaveText(/^8 voices · 5 references · study #[0-9a-f]{8}$/);
   await expect(page.locator('.instr')).toContainText('Rank them from the clearest voice');
+  await expect(page.locator('.how')).toContainText('The plain blue samples are references');
   await expect(page.locator('.results-note')).toHaveText(/^Results are kept in this browser as NeAR_Example files_[0-9a-f]{8}\.csv\. No sessions saved yet\.$/);
   await expect(page.locator('input[type="checkbox"]:not([name="animate"])')).toHaveCount(0);
-
-  // Nothing can be played, moved or saved until the session has a name.
-  await expect(page.locator('.board')).toHaveAttribute('data-locked', 'true');
-  await expect(page.locator('.lockmsg')).toHaveText('Enter a session name above to start rating');
-  await expect(page.getByRole('button', { name: 'Save and finish' })).toBeDisabled();
-  await name(page, 'Demo');
-  await expect(page.getByRole('button', { name: 'Save and finish' })).toBeEnabled();
 
   // Animation is each rater's own preference: on by default.
   const animate = page.locator('input[name="animate"]');
   await expect(animate).toBeChecked();
   if (testInfo.project.name === 'not-animated') await animate.uncheck();
+
+  // Rating can't start until the session has a name.
+  await expect(page.getByRole('button', { name: 'Start rating' })).toBeDisabled();
+  await name(page, 'Demo');
+
+  // The rating screen itself: one bar, the instructions, and the two boxes.
+  await expect(page.locator('.rating > *')).toHaveCount(4);
+  await expect(page.locator('.rating-instr')).toContainText('Rank them from the clearest voice');
+  await expect(page.locator('#rater')).toHaveCount(0);
 
   const rated = page.locator('.box.rated');
   await expect(rated.locator('.tile.ref')).toHaveCount(5);
@@ -98,18 +101,19 @@ test('a demo session with the example study saves the expected ranks', async ({ 
   // Another session straight away; a session name already used is questioned when saving.
   await page.getByRole('button', { name: 'Start another session' }).click();
   await expect(page.locator('.results-note')).toContainText('1 session, last on');
-  await name(page, 'Demo');
+  await expect(page.locator('#rater')).toHaveValue('Demo'); // the name carries over, to change or keep
+  await page.getByRole('button', { name: 'Start rating' }).click();
   await page.getByRole('button', { name: 'Save and finish' }).click();
   await expect(page.locator('dialog')).toContainText('All the samples must be rated'); // the example fixes this
   await page.getByRole('button', { name: 'OK' }).click();
   await page.getByRole('button', { name: 'Save and finish' }).click({ modifiers: ['Control'] }); // the supervisor's override
-  await expect(page.locator('dialog')).toContainText('This session name has already been used');
+  await expect(page.locator('dialog')).toContainText('The session name “Demo” has already been used for this study');
   await page.getByRole('button', { name: 'No', exact: true }).click();
   await expect(page.locator('.rating')).toHaveCount(1);
 });
 
 test('dragging to the edge of the window scrolls to boxes that are off screen', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 520 });
+  await page.setViewportSize({ width: 900, height: 400 });
   await openExample(page);
   await name(page, 'Scroller');
   await expect(page.locator('.box.unrated .tile')).toHaveCount(8);
@@ -136,6 +140,22 @@ test('dragging to the edge of the window scrolls to boxes that are off screen', 
 test('Back from the rating screen always asks, with Keep rating as the safe choice', async ({ page }) => {
   await openExample(page);
   await name(page, 'Undecided');
+
+  // Study info, mid-session: the same information read-only; returning keeps every tile where it was.
+  const tile = page.locator('.box.unrated .tile').first();
+  const t = (await tile.boundingBox())!;
+  const r = (await page.locator('.box.rated').boundingBox())!;
+  await drag(page, { x: t.x + t.width / 2, y: t.y + 20 }, { x: r.x + r.width - 20, y: r.y + r.height - 15 });
+  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
+  const order = await page.locator('.tile').evaluateAll((ts) => ts.map((x) => (x as HTMLElement).dataset.id));
+  await page.getByRole('button', { name: 'Study info' }).click();
+  const info = page.locator('dialog');
+  await expect(info.locator('.study-title')).toHaveText('Example files');
+  await expect(info).toContainText('Session name: Undecided');
+  await expect(info.locator('input:not([name="animate"])')).toHaveCount(0); // the name is fixed once rating has started
+  await info.getByRole('button', { name: 'Return to rating' }).click();
+  expect(await page.locator('.tile').evaluateAll((ts) => ts.map((x) => (x as HTMLElement).dataset.id))).toEqual(order);
+
   const back = page.getByRole('button', { name: '← Back' });
   await back.click();
   const dialog = page.locator('dialog');
@@ -146,28 +166,28 @@ test('Back from the rating screen always asks, with Keep rating as the safe choi
   await expect(page.locator('.rating')).toHaveCount(1);
   await back.click();
   await page.getByRole('button', { name: 'Keep rating' }).click();
-  await expect(page.locator('#rater')).toHaveValue('Undecided');
+  await expect(page.locator('.count')).toHaveText('7 of 8 left to rate');
   await back.click();
   await page.getByRole('button', { name: 'Leave without saving' }).click();
   await expect(page.getByRole('heading', { name: 'Which study are you rating?' })).toBeVisible();
   expect(await storedResults(page)).toEqual({}); // nothing saved, nothing left behind
 });
 
-test('a session name with a comma keeps the board locked, with a note', async ({ page }) => {
+test('a session name with a comma can’t start rating, with a note; Back from Study info needs no warning', async ({ page }) => {
   await openExample(page);
   await page.locator('#rater').fill('Smith, J');
   await expect(page.locator('.field-note')).toContainText('can’t contain a comma');
-  await expect(page.locator('.board')).toHaveAttribute('data-locked', 'true');
-  await expect(page.getByRole('button', { name: 'Save and finish' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Start rating' })).toBeDisabled();
   await page.locator('#rater').fill('Smith J');
   await expect(page.locator('.field-note')).toBeHidden();
-  await expect(page.locator('.board')).toHaveAttribute('data-locked', 'false');
+  await expect(page.getByRole('button', { name: 'Start rating' })).toBeEnabled();
+  await page.getByRole('button', { name: '← Back' }).click();
+  await expect(page.getByRole('heading', { name: 'Which study are you rating?' })).toBeVisible();
 });
 
 test('recent studies: carry on with the last one, or open any from the list', async ({ page }) => {
   await openExample(page, 1);
   await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: 'Leave without saving' }).click();
   await page.getByRole('button', { name: '← Back' }).click();
   await page.getByRole('button', { name: /Rate a study/ }).click();
   const panels = page.locator('.page > section h2, .page > section strong').first();
@@ -376,7 +396,7 @@ test('only one NeAR session runs at a time across windows, and the download afte
   await b.getByRole('button', { name: '← Back' }).click();
   await b.getByRole('button', { name: /Rate a study/ }).click();
   await b.getByRole('button', { name: 'Try it', exact: true }).click();
-  await expect(b.locator('.rating')).toHaveCount(1);
+  await expect(b.locator('#rater')).toHaveCount(1);
 });
 
 test('closing the window that holds a session frees it for other windows', async ({ context }) => {
@@ -384,5 +404,5 @@ test('closing the window that holds a session frees it for other windows', async
   await openExample(a);
   await a.close({ runBeforeUnload: false });
   await openExample(b);
-  await expect(b.locator('.rating')).toHaveCount(1);
+  await expect(b.locator('#rater')).toHaveCount(1);
 });

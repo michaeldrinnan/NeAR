@@ -37,8 +37,10 @@ Home has four bars, each opening its own page with a large **Back** button:
   the options On or Off, give it a title and instructions, then *Save* (writes `study.txt`),
   *Save as zip…* or *Try it now*. Editing a study means choosing its folder again.
 - **Rate a study** — example studies, *Carry on* with the last study, recent studies, and
-  *A study you were sent* (a `.zip` or a folder). Opening a study goes straight to the rating
-  screen, where a session name must be entered before rating; *Back* asks before leaving.
+  *A study you were sent* (a `.zip` or a folder). Opening a study shows its Study info
+  screen, where a session name must be entered before rating; the rating screen then holds just
+  one bar (Back, Study info, player, Save and finish), the instructions and the two boxes.
+  *Back* asks before leaving a session.
 - **Results** — results kept in this browser: download, import, delete, and recovery of
   results saved by earlier web versions.
 
