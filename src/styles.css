@@ -210,6 +210,8 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
 
 .rating { display: grid; gap: 12px; }
 .instr { padding: 12px 14px; border-radius: 6px; background: var(--well); display: grid; gap: 4px; }
+/* On the rating screen the instructions get a box of their own, like the two sample boxes. */
+.rating-instr { border: 2px solid #56637a; border-radius: 8px; background: var(--box); }
 .box {
   display: flex;
   flex-wrap: wrap;
