@@ -12,6 +12,8 @@ import { CSV_FILE, buildHeader, buildRow, computeRanks, parseLines, raterUsed, s
 import { downloadLines, importBrowserResults, resultsFor, saveCopy } from '../lib/results';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
 import { runRating, type RatingOptions } from './rating';
+import { chooseStudy, recoverResults } from './studies';
+import { discardIfEmpty, exampleStudy, readStudy } from '../lib/studies';
 
 const OPTIONS_KEY = 'near.options';
 
@@ -64,6 +66,8 @@ const pickButtons = (kind: SourceKind) =>
 // Chosen folders and the session name carry over from one session to the next, as in the original.
 const sources: Record<SourceKind, Source | null> = { samples: null, refs: null };
 let rater = '';
+// Shared across replacement forms, through rating and the complete save/recovery flow.
+let sessionBusy = false;
 // Refreshes the "results kept in this browser" line on the current start screen.
 let refreshKept: () => void = () => {};
 
@@ -86,6 +90,8 @@ export function showSetup(root: HTMLElement): void {
         <div class="row">${pickButtons('samples')}</div>
         <p class="status" data-status="samples">No folder chosen.</p>
         <p class="status kept" data-kept hidden></p>
+        <div class="row"><button type="button" data-study hidden>Choose study…</button>
+          <button type="button" data-recover>Recover older results…</button></div>
       </fieldset>
 
       <fieldset class="panel tone-teal">
@@ -114,9 +120,8 @@ export function showSetup(root: HTMLElement): void {
         <button type="submit" class="primary start">Start</button>
         <span class="saved" aria-live="polite"></span>
         <span class="spacer"></span>
-        ${canUseFolders ? '' : `
-          <button type="button" data-download>Download ${CSV_FILE}</button>
-          <button type="button" data-import>Import ${CSV_FILE}…</button>`}
+        <button type="button" data-download ${canUseFolders ? 'hidden' : ''}>Download ${CSV_FILE}</button>
+        <button type="button" data-import ${canUseFolders ? 'hidden' : ''}>Import ${CSV_FILE}…</button>
       </div>
       ${canUseFolders ? '' : `<p class="note">This browser can't save into folders, so results are kept in this
         browser. Download ${CSV_FILE} after your sessions to keep a copy, or use Chrome or Edge on a computer to
@@ -130,6 +135,43 @@ export function showSetup(root: HTMLElement): void {
   const q = <T extends Element>(sel: string) => form.querySelector<T>(sel)!;
   const saved = q<HTMLElement>('.saved');
   const raterInput = q<HTMLInputElement>('#rater');
+
+  form.inert = sessionBusy;
+  q<HTMLButtonElement>('.start').disabled = sessionBusy;
+  async function exclusive(action: () => Promise<void>) {
+    if (sessionBusy) return;
+    sessionBusy = true;
+    form.inert = true;
+    q<HTMLButtonElement>('.start').disabled = true;
+    try {
+      await action();
+    } catch (e) {
+      await alertBox(`Couldn't complete this action.\n\n${(e as Error).message}`);
+    } finally {
+      sessionBusy = false;
+      const current = root.querySelector<HTMLFormElement>('form');
+      if (current) {
+        current.inert = false;
+        current.querySelector<HTMLButtonElement>('.start')!.disabled = false;
+      }
+    }
+  }
+  async function ensureStudy(src: Source): Promise<boolean> {
+    if (src.dir || src.studyId) return true;
+    const chosen = await chooseStudy(src);
+    if (sources.samples === src) await showKept(src);
+    return chosen;
+  }
+  q<HTMLButtonElement>('[data-study]').addEventListener('click', () => void exclusive(async () => {
+    const src = sources.samples;
+    if (src && !src.dir) {
+      await chooseStudy(src);
+      await showKept(src); // also after a deletion, even if the chooser was then cancelled
+    }
+  }));
+  q<HTMLButtonElement>('[data-recover]').addEventListener('click', () => void exclusive(async () => {
+    if (await recoverResults(sources.samples)) refreshKept();
+  }));
 
   // ---- options ----
   for (const key of Object.keys(defaults) as (keyof Settings)[]) {
@@ -152,11 +194,21 @@ export function showSetup(root: HTMLElement): void {
 
   async function showKept(src: Source) {
     const kept = q<HTMLElement>('[data-kept]');
+    q<HTMLButtonElement>('[data-study]').hidden = !!src.dir;
+    q<HTMLButtonElement>('[data-download]').hidden = !!src.dir;
+    q<HTMLButtonElement>('[data-import]').hidden = !!src.dir;
+    if (!src.dir && !src.studyId) {
+      kept.hidden = false;
+      kept.textContent = 'Choose a study before starting. To retrieve results from an older version, use Recover older results.';
+      return;
+    }
     const store = resultsFor(src);
     kept.hidden = !store.inBrowser;
     if (!store.readStored) return;
     let stored: string[] | null;
+    let studyName = src.label;
     try {
+      if (src.studyId) studyName = (await readStudy(src.studyId)).name;
       stored = await store.readStored();
     } catch {
       kept.textContent = 'The results kept in this browser for this study could not be read.';
@@ -165,8 +217,8 @@ export function showSetup(root: HTMLElement): void {
     if (sources.samples !== src) return; // a different folder was chosen meanwhile
     const { sessions, last } = summarize(stored);
     kept.textContent = sessions
-      ? `Results kept in this browser for this study: ${sessions} session${sessions === 1 ? '' : 's'}${last ? `, last on ${last}` : ''}.`
-      : 'No results kept in this browser for this study yet.';
+      ? `Results kept in this browser for “${studyName}”: ${sessions} session${sessions === 1 ? '' : 's'}${last ? `, last on ${last}` : ''}.`
+      : `No results kept in this browser for “${studyName}” yet.`;
   }
 
   function setSource(kind: SourceKind, src: Source | null) {
@@ -243,6 +295,8 @@ export function showSetup(root: HTMLElement): void {
     btn.disabled = true;
     try {
       const { samples, refs } = await loadExamples();
+      // Example sessions go to their own built-in study, so the demo is just: press Start.
+      samples.studyId = (await exampleStudy(samples)).id;
       setSource('samples', samples);
       setSource('refs', refs);
       const useRefs = q<HTMLInputElement>('input[name="useRefs"]');
@@ -258,9 +312,10 @@ export function showSetup(root: HTMLElement): void {
   });
 
   // ---- browser-kept results (no folder access) ----
-  form.querySelector('[data-download]')?.addEventListener('click', async () => {
+  form.querySelector('[data-download]')?.addEventListener('click', () => void exclusive(async () => {
     const src = sources.samples;
     if (!src) return void alertBox('Choose the samples first; results are kept per samples folder.');
+    if (!await ensureStudy(src)) return;
     let lines: string[] | null;
     try {
       lines = await resultsFor(src).read();
@@ -271,43 +326,45 @@ ${(e as Error).message}`);
     }
     if (!lines) return void alertBox(`There are no results for “${src.label}” yet.`);
     downloadLines(lines, CSV_FILE);
-  });
+  }));
   const csvInput = q<HTMLInputElement>('[data-input-csv]');
   form.querySelector('[data-import]')?.addEventListener('click', () => {
     if (!sources.samples) return void alertBox('Choose the samples first; results are kept per samples folder.');
     csvInput.value = '';
     csvInput.click();
   });
-  csvInput.addEventListener('change', async () => {
+  csvInput.addEventListener('change', () => void exclusive(async () => {
     const file = csvInput.files?.[0];
     const src = sources.samples;
     if (!file || !src) return;
+    if (!await ensureStudy(src)) return;
     const ok = await yesNo(`Replace the results kept in this browser for “${src.label}” with “${file.name}”?`);
     if (ok === 'yes') {
       await importBrowserResults(src, file);
       saved.textContent = `Imported ${file.name}.`;
       void showKept(src);
     }
-  });
+  }));
 
   setSource('samples', sources.samples);
   setSource('refs', sources.refs);
   raterInput.value = rater;
-  // One session at a time: Start stays disabled while folders, results and questions are dealt with.
-  const startBtn = q<HTMLButtonElement>('.start');
-  let starting = false;
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (starting) return;
-    starting = true;
-    startBtn.disabled = true;
-    rater = raterInput.value;
-    try {
-      await start();
-    } finally {
-      starting = false;
-      startBtn.disabled = false; // harmless if a session has since replaced this screen
-    }
+    void exclusive(async () => {
+      rater = raterInput.value;
+      const samples = sources.samples;
+      const hadStudy = samples?.studyId;
+      try {
+        await start();
+      } finally {
+        // A study created just now for a session that was then abandoned is removed again.
+        if (samples && !samples.dir && samples.studyId && samples.studyId !== hadStudy && (await discardIfEmpty(samples.studyId).catch(() => false))) {
+          samples.studyId = undefined;
+          refreshKept();
+        }
+      }
+    });
   });
 
   // ---- the session (the old BtnStart_Click) ----
@@ -336,6 +393,7 @@ ${(e as Error).message}`);
     if (rater.includes(','))
       return void alertBox('Your rating session ID contains the comma character.\nThis will be misinterpreted by programs that include Microsoft Excel, and should be removed.');
 
+    if (!await ensureStudy(samples)) return;
     const store = resultsFor(samples);
     const header = buildHeader(samples.items.map((s) => s.name));
 
@@ -388,8 +446,17 @@ ${(e as Error).message}`);
         ranks: computeRanks(samples.items.map((s) => s.id), ratedBox),
       }),
     );
+    root.innerHTML = '<section aria-live="polite"><p>Saving results…</p><p class="saved"></p></section>';
+    const warnOnLeave = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warnOnLeave);
+    try {
+      await writeResults(root, store, lines, samples.dir);
+    } finally {
+      window.removeEventListener('beforeunload', warnOnLeave);
+    }
+    const message = root.querySelector<HTMLElement>('.saved')?.textContent ?? '';
     showSetup(root);
-    await writeResults(root, store, lines, samples.dir);
+    root.querySelector<HTMLElement>('.saved')!.textContent = message;
     refreshKept();
   }
 }

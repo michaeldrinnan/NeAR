@@ -25,6 +25,8 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await expect(page.locator('[data-status="samples"]')).toHaveText('Rating 8 WAV files in “Example files”.');
   await expect(page.locator('[data-status="refs"]')).toHaveText('Using 5 WAV files as reference in “Example references”.');
   await expect(page.locator('#rater')).toHaveValue('Demo');
+  // The examples have their own built-in study, so the demo needs no study choice: just Start.
+  await expect(page.locator('[data-kept]')).toHaveText('No results kept in this browser for “Example files” yet.');
   const animate = page.locator('input[name="animate"]');
   await expect(animate).toBeChecked(); // on by default
   if (testInfo.project.name === 'not-animated') await animate.uncheck();
@@ -86,15 +88,15 @@ test('a demo session with the example files saves the expected ranks', async ({ 
         const open = indexedDB.open('near');
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
-          // Browser-kept results are filed per study: "results:<folder name>:<fingerprint of its files>".
+          // Each explicitly chosen study has its own persistent ID.
           const store = open.result.transaction('kv').objectStore('kv');
           const keys = store.getAllKeys();
           keys.onerror = () => reject(keys.error);
           keys.onsuccess = () => {
-            const key = (keys.result as string[]).filter((k) => k.startsWith('results:Example files:'));
+            const key = (keys.result as string[]).filter((k) => k.startsWith('study:'));
             if (key.length !== 1) return reject(new Error(`expected one example-files store, found ${key.length}`));
             const get = store.get(key[0]);
-            get.onsuccess = () => resolve(get.result as string[]);
+            get.onsuccess = () => resolve(get.result.lines as string[]);
             get.onerror = () => reject(get.error);
           };
         };
@@ -170,7 +172,9 @@ async function pickFiles(page: Page, files: Record<string, string>) {
 
 /** Rates nothing (unrated samples allowed) and saves, adding one session to the study's results. */
 async function quickSession(page: Page, rater: string) {
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.locator('#rater').fill(rater);
+  await expect(page.locator('#rater')).toHaveValue(rater);
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.getByRole('button', { name: 'Finished rating' }).click();
   await page.getByRole('button', { name: 'Yes' }).click();
@@ -183,23 +187,35 @@ test('browser-kept results are kept per study, summarised, and a differing NeAR.
   await page.locator('input[name="canLeave"]').check();
   const kept = page.locator('[data-kept]');
   const studyA = { 'a1.wav': 'AAAA', 'a2.wav': 'AAAAAA' };
-  const studyB = { 'b1.wav': 'BBBB', 'b2.wav': 'BBBBBB' };
+  const studyB = { 'a1.wav': 'BBBB', 'a2.wav': 'BBBBBB' }; // same filenames and sizes; different audio
 
   // (c) The start screen says what this browser already keeps for the chosen study.
   await pickFiles(page, studyA);
-  await expect(kept).toHaveText('No results kept in this browser for this study yet.');
+  await chooseNewStudy(page, 'Study A');
+  await expect(kept).toContainText('No results kept');
   await quickSession(page, 'Rater 1');
-  await expect(kept).toHaveText(/^Results kept in this browser for this study: 1 session, last on \d{4}-\d{2}-\d{2}\.$/);
+  await expect(kept).toHaveText(/^Results kept in this browser for “Study A”: 1 session, last on \d{4}-\d{2}-\d{2}\.$/);
 
   // (a) Another "Choose files…" pick is a different study, so it starts empty instead of sharing A's results.
   await pickFiles(page, studyB);
-  await expect(kept).toHaveText('No results kept in this browser for this study yet.');
+  await page.locator('[data-study]').click();
+  await expect(page.locator('dialog option').filter({ hasText: 'Study A' })).toHaveJSProperty('disabled', true);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await chooseNewStudy(page, 'Study B');
+  await expect(kept).toContainText('No results kept');
+  // Re-picking A: the one study holding these recordings is already selected, so Continue carries on with it.
   await pickFiles(page, studyA);
+  await page.locator('[data-study]').click();
+  const studyAId = await page.locator('dialog option').filter({ hasText: 'Study A —' }).getAttribute('value');
+  await expect(page.getByRole('combobox', { name: 'Study', exact: true })).toHaveValue(studyAId!);
+  await expect(page.getByLabel('New study name', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(kept).toContainText('1 session');
 
   // (b) The same study picked with a NeAR.csv that differs from the browser's copy: NeAR asks which to use.
   const folderCsv = 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,a1.wav,a2.wav\r\nOld,2020-01-01,09:00:00,Lab,,0,1,2\r\nOlder,2020-01-02,09:00:00,Lab,,0,2,1\r\n';
   await pickFiles(page, { ...studyA, 'NeAR.csv': folderCsv });
+  await chooseExistingStudy(page, 'Study A');
   await page.locator('#rater').fill('Rater 2');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   const question = page.locator('dialog');
@@ -216,4 +232,186 @@ test('browser-kept results are kept per study, summarised, and a differing NeAR.
   await page.getByRole('button', { name: 'Yes' }).click();
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(kept).toContainText('3 sessions');
+});
+
+async function chooseNewStudy(page: Page, name: string) {
+  await page.locator("[data-study]").click();
+  await page.getByRole('combobox', { name: 'Study', exact: true }).selectOption('new');
+  await page.getByLabel("New study name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+}
+
+async function chooseExistingStudy(page: Page, name: string) {
+  await page.locator("[data-study]").click();
+  const id = await page.locator("dialog option").filter({ hasText: name + " —" }).getAttribute("value");
+  await page.getByRole('combobox', { name: 'Study', exact: true }).selectOption(id!);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+}
+
+test('identical recordings can belong to separate studies', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[name="canLeave"]').check();
+  await pickFiles(page, { 'a.wav': 'AAAA' });
+  await chooseNewStudy(page, 'First study');
+  await quickSession(page, 'First rater');
+  await chooseNewStudy(page, 'Second study');
+  await expect(page.locator('[data-kept]')).toContainText('No results kept');
+  await chooseExistingStudy(page, 'First study');
+  await expect(page.locator('[data-kept]')).toContainText('1 session');
+});
+
+test('older results can be downloaded, cancelled, and recovered without deleting the originals', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('near', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('kv');
+      open.onsuccess = () => {
+        const tx = open.result.transaction('kv', 'readwrite');
+        const lines = ['RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,a.wav', 'Old,2020-01-01,12:00:00,src,,0,1'];
+        tx.objectStore('kv').put(lines, 'results:Selected files');
+        tx.objectStore('kv').put(lines, 'results:Selected files:oldhash');
+        tx.oncomplete = () => { open.result.close(); resolve(); };
+        tx.onabort = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+  await page.locator('[data-recover]').click();
+  await expect(page.locator('dialog select option')).toHaveCount(2);
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download older results', exact: true }).click();
+  expect((await downloaded).suggestedFilename()).toBe('NeAR recovered results.csv');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await pickFiles(page, { 'a.wav': 'AAAA' });
+  await page.locator('[data-recover]').click();
+  await expect(page.locator('dialog')).toContainText('Sample columns match');
+  await expect(page.locator('dialog')).toContainText('1 session, last on 2020-01-01');
+  await page.getByRole('button', { name: 'Recover into new study', exact: true }).click();
+  await expect(page.locator('[data-kept]')).toContainText('1 session');
+  await page.locator('[data-recover]').click();
+  await expect(page.locator('dialog select option')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+});
+
+test('Start is unavailable throughout a delayed save, failed save and retry', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = { csv: '', attempts: 0, release: (_fail: boolean) => {} };
+    (window as unknown as { testSave: typeof state }).testSave = state;
+    const sample = { kind: 'file', getFile: async () => new File(['AAAA'], 'a.wav') };
+    const results = {
+      getFile: async () => new File([state.csv], 'NeAR.csv'),
+      createWritable: async () => {
+        let pending = '';
+        return {
+          write: async (text: string) => { pending = text; },
+          close: () => new Promise<void>((resolve, reject) => {
+            state.attempts++;
+            state.release = (fail: boolean) => {
+              if (fail) reject(new Error('Simulated disk failure'));
+              else { state.csv = pending; resolve(); }
+            };
+          }),
+        };
+      },
+    };
+    Object.defineProperty(window, 'showDirectoryPicker', { value: async () => ({
+      name: 'Test folder', kind: 'directory',
+      async *entries() { yield ['a.wav', sample]; },
+      getFileHandle: async (_name: string, options?: { create?: boolean }) => {
+        if (!state.csv && !options?.create) throw new DOMException('Missing', 'NotFoundError');
+        return results;
+      },
+    }) });
+  });
+  await page.goto('/');
+  await page.locator('[data-pick="samples"]').click();
+  await page.locator('input[name="canLeave"]').check();
+  await page.locator('#rater').fill('Rater 1');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Finished rating' }).click();
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect(page.getByText('Saving results…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0);
+  const attempts = () => page.evaluate(() => (window as unknown as { testSave: { attempts: number } }).testSave.attempts);
+  const release = (fail: boolean) => page.evaluate((f) => (window as unknown as { testSave: { release(fail: boolean): void } }).testSave.release(f), fail);
+  await expect.poll(attempts).toBe(1);
+  await release(true);
+  await expect(page.locator('dialog')).toContainText('Your results have not been saved');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect.poll(attempts).toBe(2);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0);
+  await release(false);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await expect(page.locator('.saved')).toContainText('Saved to');
+  await page.locator('#rater').fill('Rater 2');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Finished rating' }).click();
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect.poll(attempts).toBe(3);
+  await release(false);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  const csv = await page.evaluate(() => (window as unknown as { testSave: { csv: string } }).testSave.csv);
+  expect(csv).toContain('Rater 1,');
+  expect(csv).toContain('Rater 2,');
+  // Explicit abandonment also releases the application-level guard.
+  await page.locator('#rater').fill('Rater 3');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Finished rating' }).click();
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect.poll(attempts).toBe(4);
+  await release(true);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+  await expect(page.locator('.saved')).toContainText('NOT saved');
+});
+
+test('a study created for a session that is then abandoned is removed again', async ({ page }) => {
+  await page.goto('/');
+  // The folder's NeAR.csv belongs to other recordings, so NeAR will ask to reset it; cancelling abandons the session.
+  await pickFiles(page, { 'a.wav': 'AAAA', 'NeAR.csv': 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,other.wav\r\n' });
+  await page.locator('#rater').fill('Rater');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByLabel('New study name', { exact: true }).fill('Abandoned');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.locator('dialog')).toContainText('have changed since the last session');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await expect(page.locator('[data-kept]')).toContainText('Choose a study before starting');
+  await page.locator('[data-study]').click();
+  await expect(page.locator('dialog option').filter({ hasText: 'Abandoned' })).toHaveCount(0);
+});
+
+test('a study can be deleted from the chooser, with its results downloaded first', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[name="canLeave"]').check();
+  await pickFiles(page, { 'a.wav': 'AAAA' });
+  await chooseNewStudy(page, 'Old study');
+  await quickSession(page, 'Rater 1');
+  await chooseNewStudy(page, 'Keep me');
+
+  await page.locator('[data-study]').click();
+  await page.getByRole('button', { name: 'Delete…' }).click();
+  const target = page.getByRole('combobox', { name: 'Study to delete' });
+  const id = await page.locator('dialog option').filter({ hasText: 'Old study —' }).getAttribute('value');
+  await target.selectOption(id!);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download results' }).click();
+  expect((await download).suggestedFilename()).toBe('NeAR Old study.csv');
+
+  await page.getByRole('button', { name: 'Delete study' }).click();
+  await page.getByRole('button', { name: 'Keep it' }).click(); // changed mind: nothing deleted
+  await page.getByRole('button', { name: 'Delete study' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // Back in the chooser: the deleted study is gone, the other remains.
+  await expect(page.locator('dialog option').filter({ hasText: 'Old study' })).toHaveCount(0);
+  await expect(page.locator('dialog option').filter({ hasText: 'Keep me' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('[data-kept]')).toContainText('“Keep me”');
 });

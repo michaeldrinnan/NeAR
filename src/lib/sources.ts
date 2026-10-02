@@ -13,6 +13,8 @@ export interface AudioItem {
 
 /** A set of WAV files to rate, or to use as references. */
 export interface Source {
+  /** Explicitly selected browser study; never inferred from a folder name. */
+  studyId?: string;
   /** Folder name, written to the SOURCE / REFERENCE columns. */
   label: string;
   items: AudioItem[];

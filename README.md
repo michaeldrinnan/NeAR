@@ -43,6 +43,23 @@ Regenerate them with `npm run examples`.
 | `NeAR.csv` | Read and appended **in the samples folder**, as before | Kept in the browser; *Download NeAR.csv* / *Import NeAR.csv…* buttons |
 | Remembers folders | Yes (one click to re-grant access) | No |
 
+### Studies kept in the browser
+
+After selecting samples, use **Choose study…** to create a named study or explicitly
+continue an existing one. Start also asks if no study has been selected. Separate studies
+can use identical recordings without sharing results. Existing studies are available only
+when the selected filenames and audio contents match; changed recordings need a new study.
+The comparison reads files locally, one at a time, and does not upload audio.
+
+Use **Recover older results…** to find results saved by either previous browser-storage
+format. You can download these without selecting audio. To recover them into a new study,
+select the original samples, check the displayed session count and matching sample columns,
+and confirm recovery. The original results remain stored as a backup, including if recovery
+fails or is cancelled. A column match alone cannot prove which recordings were originally used.
+
+After finishing a session, NeAR keeps the start screen unavailable until results have been
+saved, saved elsewhere, or explicitly abandoned through the save-error dialog.
+
 ## Results file
 
 Same layout as the 2012 version, so existing `NeAR.csv` files keep working:
@@ -53,8 +70,9 @@ RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,<sample 1>,<sample 2>,...
 
 - Ranks count reference positions (1 = best); unrated samples are 0.
 - Columns are in Windows (NTFS) file order, so a header written by the old app still matches.
-- If the WAV files change, the app offers to save the old results under another name before
-  starting a new file — exactly as before.
+- With direct folder access, if sample filenames change, the app offers to save the old
+  results under another name before starting a new file. Browser studies keep changed
+  recordings in a separate study, preserving the earlier study's results.
 
 ## Changes from the 2012 version
 

@@ -224,7 +224,10 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .modal::backdrop { background: rgb(10 14 24 / 0.45); }
 .modal h2 { margin: 0 0 10px; font-size: 1rem; }
 .modal-body { white-space: pre-line; }
-.modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.study-form { display: grid; gap: 12px; white-space: normal; }
+.study-form label { display: grid; gap: 4px; }
+.study-form input, .study-form select { width: 100%; min-width: 0; padding: 8px; font: inherit; }
+.modal-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .about { white-space: normal; }
 .about-title { font-size: 1.15rem; font-weight: 600; margin-top: 0; }
 .about dl { margin: 0; }

@@ -53,3 +53,7 @@ export function kvSet(key: string, value: unknown): Promise<void> {
 export function kvDelete(key: string): Promise<void> {
   return run('readwrite', (s) => s.delete(key));
 }
+
+export function kvKeys(): Promise<IDBValidKey[]> {
+  return run('readonly', (s) => s.getAllKeys());
+}

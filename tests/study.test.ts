@@ -1,30 +1,72 @@
-import { describe, expect, it } from 'vitest';
-import { studyKey } from '../src/lib/results';
-import { sameLines, summarize } from '../src/lib/csv';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { sameLines, summarize, buildHeader } from '../src/lib/csv';
+import { createStudy, fingerprintSource, legacyResults, recoverStudy, readStudy, writeStudy } from '../src/lib/studies';
+import { resultsFor } from '../src/lib/results';
+import type { Source } from '../src/lib/sources';
 
-const study = (label: string, files: [string, number][]) => ({
-  label,
-  items: files.map(([name, size]) => ({ id: 's:' + name, name, size, getFile: async () => new File([], name) })),
+const memory = vi.hoisted(() => new Map<string, unknown>());
+const write = vi.hoisted(() => vi.fn(async (key: string, value: unknown) => { memory.set(key, structuredClone(value)); }));
+vi.mock('../src/lib/kv', () => ({
+  kvKeys: async () => [...memory.keys()],
+  kvGet: async (key: string) => structuredClone(memory.get(key)),
+  kvSet: write,
+}));
+beforeEach(() => { memory.clear(); write.mockClear(); });
+
+const source = (body = 'AAAA', label = 'Selected files'): Source => ({
+  label, items: [{ id: 's:a.wav', name: 'a.wav', size: body.length, getFile: async () => new File([body], 'a.wav') }],
 });
 
-describe('studyKey', () => {
-  it('is the same for the same folder name and files', () => {
-    expect(studyKey(study('Voices', [['a.wav', 10], ['b.wav', 20]]))).toBe(studyKey(study('Voices', [['a.wav', 10], ['b.wav', 20]])));
+describe('explicit browser studies', () => {
+  it('distinguishes actual recordings with identical names and sizes', async () => {
+    expect(await fingerprintSource(source('AAAA'))).not.toBe(await fingerprintSource(source('BBBB')));
   });
-
-  it('separates folders that share a name but hold different files', () => {
-    const key = studyKey(study('Voices', [['a.wav', 10], ['b.wav', 20]]));
-    expect(studyKey(study('Voices', [['a.wav', 10], ['c.wav', 20]]))).not.toBe(key); // different name
-    expect(studyKey(study('Voices', [['a.wav', 10], ['b.wav', 21]]))).not.toBe(key); // same names, different recordings
-    expect(studyKey(study('Voices', [['a.wav', 10]]))).not.toBe(key); // a file fewer
+  it('matches identical recordings regardless of folder label or selection order', async () => {
+    const a = source();
+    a.items.push({ id: 's:b.wav', name: 'b.wav', getFile: async () => new File(['BB'], 'b.wav') });
+    expect(await fingerprintSource(a)).toBe(await fingerprintSource({ label: 'Renamed folder', items: [...a.items].reverse() }));
   });
-
-  it('separates "Choose files…" picks, which all share the label "Selected files"', () => {
-    expect(studyKey(study('Selected files', [['x.wav', 1]]))).not.toBe(studyKey(study('Selected files', [['y.wav', 1]])));
+  it('keeps separate studies with identical audio independent, and requires explicit selection', async () => {
+    const a = source(), b = source();
+    expect(() => resultsFor(a)).toThrow('Choose a browser study');
+    a.studyId = (await createStudy(a, 'Study A')).id;
+    b.studyId = (await createStudy(b, 'Study B')).id;
+    expect(a.studyId).not.toBe(b.studyId);
+    await resultsFor(a).write(['header', 'A result']);
+    expect(await resultsFor(b).read()).toBeNull();
+    const reopened = { ...source(), studyId: a.studyId };
+    expect(await resultsFor(reopened).read()).toEqual(['header', 'A result']);
   });
+});
 
-  it('keeps the folder name visible in the key', () => {
-    expect(studyKey(study('Example files', [['a.wav', 1]]))).toMatch(/^results:Example files:/);
+describe('legacy recovery', () => {
+  it('finds both older formats without deleting or assigning them', async () => {
+    memory.set('results:Selected files', ['old']);
+    memory.set('results:Selected files:abc123', ['intermediate']);
+    const before = structuredClone(memory);
+    expect(await legacyResults()).toHaveLength(2);
+    expect(memory).toEqual(before);
+  });
+  it('recovers matching columns into a new study and retains the original', async () => {
+    const src = source();
+    const lines = [buildHeader(['a.wav']), 'Legacy,2026-01-01,12:00:00,src,,0,1'];
+    memory.set('results:Selected files', lines);
+    const study = await recoverStudy(src, 'Recovered', 'results:Selected files');
+    expect((await readStudy(study.id)).lines).toEqual(lines);
+    await writeStudy(study.id, [...lines, 'new result']);
+    expect(memory.get('results:Selected files')).toEqual(lines);
+  });
+  it('preserves the legacy copy and creates no partial study when migration fails', async () => {
+    const lines = [buildHeader(['a.wav']), 'legacy result'];
+    memory.set('results:Selected files', lines);
+    write.mockRejectedValueOnce(new Error('Commit failed'));
+    await expect(recoverStudy(source(), 'Recovered', 'results:Selected files')).rejects.toThrow('Commit failed');
+    expect([...memory.entries()]).toEqual([['results:Selected files', lines]]);
+  });
+  it('rejects mismatched sample columns without writing anything', async () => {
+    memory.set('results:Selected files', [buildHeader(['other.wav'])]);
+    await expect(recoverStudy(source(), 'Recovered', 'results:Selected files')).rejects.toThrow('sample columns');
+    expect(write).not.toHaveBeenCalled();
   });
 });
 
