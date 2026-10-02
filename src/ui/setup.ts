@@ -13,13 +13,24 @@ import { downloadLines, importBrowserResults, resultsFor, saveCopy } from '../li
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
 import { runRating, type RatingOptions } from './rating';
 import { chooseStudy, recoverResults } from './studies';
-import { discardIfEmpty, exampleStudy, readStudy } from '../lib/studies';
+import { discardIfEmpty, packageStudy, readStudy } from '../lib/studies';
+import {
+  compareWithKey,
+  makeStudyZip,
+  OPTION_KEYS,
+  readStudyZip,
+  sourceLabel,
+  type OptionKey,
+  type StudyDefinition,
+  type StudyPackage,
+} from '../lib/studyFormat';
+import { stem } from '../lib/order';
 
 const OPTIONS_KEY = 'near.options';
 
-interface Settings extends RatingOptions {
+type Settings = Omit<RatingOptions, 'instructions'> & {
   useRefs: boolean;
-}
+};
 
 const defaults: Settings = {
   random: false,
@@ -47,7 +58,7 @@ function saveSettings(s: Settings) {
   }
 }
 
-const CHECKBOXES: [keyof RatingOptions, string][] = [
+const CHECKBOXES: [keyof Settings, string][] = [
   ['random', 'Present the audio samples in random order. Unticked, the samples are presented alphabetically by filename.'],
   ['numbers', 'Label each audio sample with a number, in the order the samples are first presented.'],
   ['names', 'Label each audio sample with its file name. This is probably not what you want.'],
@@ -91,6 +102,55 @@ async function withSessionLock(action: () => Promise<void>): Promise<'done' | 'b
 // Refreshes the "results kept in this browser" line on the current start screen.
 let refreshKept: () => void = () => {};
 
+// The study package currently loaded, if any (docs/study-format.md). Its fixed options are locked.
+let loaded: StudyPackage | null = null;
+// A ?study= link is opened once, when the app starts.
+let linkChecked = false;
+
+/** The bundled example files, as a built-in study package. */
+const EXAMPLE_STUDY_URL = 'examples/NeAR-examples.zip';
+
+/** The settings a session actually uses: the user's, with a loaded study's fixed options on top. */
+function effectiveSettings(settings: Settings): Settings {
+  if (!loaded) return settings;
+  const s: Settings = { ...settings, useRefs: loaded.references.length > 0 };
+  for (const [key, option] of Object.entries(OPTION_KEYS) as [OptionKey, keyof Settings][]) {
+    const fixed = loaded.definition.options[key];
+    if (fixed !== undefined) (s[option] as boolean) = fixed;
+  }
+  return s;
+}
+
+/** Which start-screen boxes a loaded study fixes. */
+function lockedSettings(): Set<keyof Settings> {
+  const locked = new Set<keyof Settings>();
+  if (!loaded) return locked;
+  locked.add('useRefs'); // references are used exactly when the package has RefItems
+  for (const [key, option] of Object.entries(OPTION_KEYS) as [OptionKey, keyof Settings][]) {
+    if (loaded.definition.options[key] !== undefined) locked.add(option);
+  }
+  return locked;
+}
+
+/** After a session: the rater's order beside the study's answer key, with Spearman's rho. */
+async function showAnswers(pkg: StudyPackage, ratedBox: readonly string[]) {
+  const order = ratedBox.filter((id) => id.startsWith('s:')).map((id) => stem(id.slice(2)));
+  const key = pkg.definition.answerKey;
+  const { rho, n } = compareWithKey(order, key);
+  const left = key.filter((k) => !order.includes(k));
+  await ask(
+    `How your order compares with the answer key for “${pkg.definition.title}”:\n\n` +
+      `Your order (best first):  ${order.join(', ') || '(none rated)'}\n` +
+      `Answer key (best first):  ${key.join(', ')}\n\n` +
+      (rho === null
+        ? 'Too few samples were rated to compare.'
+        : `Agreement (Spearman's rank correlation): ${rho.toFixed(2)}, over ${n} samples.`) +
+      (left.length ? `\nUnrated samples were left out: ${left.join(', ')}.` : ''),
+    [{ label: 'OK', value: 'ok', primary: true }],
+    'Answer key',
+  );
+}
+
 /** The start-settings screen (the old DlgStart form) and the session flow behind its Start button. */
 export function showSetup(root: HTMLElement): void {
   const settings = loadSettings();
@@ -101,7 +161,18 @@ export function showSetup(root: HTMLElement): void {
         <legend>New to NeAR?</legend>
         <div class="row"><button type="button" data-demo>Try with example files</button>
           <a class="button" href="./manual/NeAR-user-manual.pdf" target="_blank" rel="noopener">Read the user manual</a></div>
-        <p class="status">You can also <a href="./examples/NeAR-examples.zip" download>download the example files (.zip)</a> to use from a folder.</p>
+        <p class="status">You can also <a href="./examples/NeAR-examples.zip" download>download the example study (.zip)</a> to open later or share.</p>
+      </fieldset>
+      <fieldset class="panel tone-green" data-study-panel>
+        <legend>Study</legend>
+        <p class="status" data-loaded>No study loaded: choose your own files below, or open a ready-made study (.zip).</p>
+        <p class="status warnings" data-warnings hidden></p>
+        <div class="row">
+          <button type="button" data-open-study>Open study…</button>
+          <button type="button" data-save-study>Save as study…</button>
+          <button type="button" data-close-study hidden>Close study</button>
+        </div>
+        <input type="file" data-input-study hidden accept=".zip,application/zip">
       </fieldset>
       <fieldset class="panel tone-blue">
         <legend>Audio samples to rate</legend>
@@ -197,16 +268,26 @@ export function showSetup(root: HTMLElement): void {
   }));
 
   // ---- options ----
+  // A loaded study's fixed options are shown as set, greyed out and marked; the rest stay the user's.
+  const locked = lockedSettings();
+  const shown = effectiveSettings(settings);
   for (const key of Object.keys(defaults) as (keyof Settings)[]) {
     const box = q<HTMLInputElement>(`input[name="${key}"]`);
-    box.checked = settings[key];
+    box.checked = shown[key];
+    if (locked.has(key)) {
+      box.disabled = true;
+      // Inside the label's text, so the note flows with it.
+      box.closest('label')!.querySelector('span')!.append(Object.assign(document.createElement('span'), { className: 'locked-note', textContent: ' (set by this study)' }));
+      continue;
+    }
     box.addEventListener('change', () => {
       settings[key] = box.checked;
       saveSettings(settings);
       syncRefs();
     });
   }
-  const syncRefs = () => form.querySelectorAll<HTMLElement>('.refs-only').forEach((el) => el.classList.toggle('disabled', !settings.useRefs));
+  const syncRefs = () =>
+    form.querySelectorAll<HTMLElement>('.refs-only').forEach((el) => el.classList.toggle('disabled', !effectiveSettings(settings).useRefs));
   syncRefs();
 
   // ---- choosing files ----
@@ -217,7 +298,7 @@ export function showSetup(root: HTMLElement): void {
 
   async function showKept(src: Source) {
     const kept = q<HTMLElement>('[data-kept]');
-    q<HTMLButtonElement>('[data-study]').hidden = !!src.dir;
+    q<HTMLButtonElement>('[data-study]').hidden = !!src.dir || !!loaded; // a loaded study has its own results
     q<HTMLButtonElement>('[data-download]').hidden = !!src.dir;
     q<HTMLButtonElement>('[data-import]').hidden = !!src.dir;
     if (!src.dir && !src.studyId) {
@@ -312,27 +393,143 @@ export function showSetup(root: HTMLElement): void {
     });
   }
 
-  // ---- example files bundled with the app ----
+  // ---- study packages (docs/study-format.md) ----
+  /** Makes a study package the current set-up: its files, its own results, its fixed options. */
+  async function usePackage(pkg: StudyPackage, message: string) {
+    const samples: Source = { ...sourceFromFiles(pkg.samples, 'samples'), label: sourceLabel(pkg) };
+    const refs: Source | null = pkg.references.length ? { ...sourceFromFiles(pkg.references, 'refs'), label: 'RefItems' } : null;
+    const { title, version } = pkg.definition;
+    samples.studyId = (await packageStudy(samples, pkg.identity, `${title} v${version}`)).id;
+    loaded = pkg;
+    sources.samples = samples;
+    sources.refs = refs;
+    rater = raterInput.value;
+    showSetup(root); // redraw with the study's settings locked
+    const status = root.querySelector<HTMLElement>('.saved');
+    if (status) status.textContent = message;
+  }
+
+  async function openPackage(read: () => Promise<Uint8Array>, failure: string, message: string) {
+    try {
+      await usePackage(await readStudyZip(await read()), message);
+    } catch (e) {
+      await alertBox(`${failure}\n\n${(e as Error).message}`);
+    }
+  }
+
+  /** Opens a study from a web address (a ?study= link, or a file on this site). */
+  const openFromUrl = (url: string, failure: string, message: string) =>
+    openPackage(
+      async () => {
+        const res = await fetch(new URL(url, document.baseURI));
+        if (!res.ok) throw new Error(`${url}: ${res.status} ${res.statusText}`);
+        return new Uint8Array(await res.arrayBuffer());
+      },
+      failure,
+      message,
+    );
+
   form.querySelector<HTMLButtonElement>('[data-demo]')!.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
     btn.disabled = true;
-    try {
-      const { samples, refs } = await loadExamples();
-      // Example sessions go to their own built-in study, so the demo is just: press Start.
-      samples.studyId = (await exampleStudy(samples)).id;
-      setSource('samples', samples);
-      setSource('refs', refs);
-      const useRefs = q<HTMLInputElement>('input[name="useRefs"]');
-      useRefs.checked = settings.useRefs = true;
-      syncRefs();
-      if (!raterInput.value) raterInput.value = 'Demo';
-      saved.textContent = 'Example files loaded: press Start.';
-    } catch (err) {
-      await alertBox(`Couldn't load the example files. Are you offline?\n\n${(err as Error).message}`);
-    } finally {
-      btn.disabled = false;
-    }
+    if (!raterInput.value) raterInput.value = 'Demo';
+    await openFromUrl(EXAMPLE_STUDY_URL, "Couldn't load the example files. Are you offline?", 'Example files loaded: press Start.');
+    btn.disabled = false;
   });
+
+  const studyInput = q<HTMLInputElement>('[data-input-study]');
+  q<HTMLButtonElement>('[data-open-study]').addEventListener('click', () => {
+    studyInput.value = '';
+    studyInput.click();
+  });
+  studyInput.addEventListener('change', () => {
+    const file = studyInput.files?.[0];
+    if (file) void openPackage(async () => new Uint8Array(await file.arrayBuffer()), `Couldn't open “${file.name}” as a study.`, 'Study loaded: press Start.');
+  });
+
+  q<HTMLButtonElement>('[data-close-study]').addEventListener('click', () => {
+    loaded = null;
+    sources.samples = sources.refs = null;
+    rater = raterInput.value;
+    showSetup(root);
+  });
+
+  q<HTMLButtonElement>('[data-save-study]').addEventListener('click', () => void saveAsStudy());
+
+  /** Writes the current set-up (files, references, every rating option fixed) as a study .zip. */
+  async function saveAsStudy() {
+    const samples = sources.samples;
+    if (loaded) return void alertBox('This set-up is already a study. Close it first to save a new one.');
+    if (!samples?.items.length) return void alertBox('Choose the audio samples first.');
+    const body = document.createElement('div');
+    body.className = 'study-form';
+    const label = Object.assign(document.createElement('label'), { textContent: 'Study title' });
+    const title = Object.assign(document.createElement('input'), { value: samples.label === 'Selected files' ? '' : samples.label });
+    label.append(title);
+    const instructions = Object.assign(document.createElement('label'), { textContent: 'Instructions for raters (optional)' });
+    const text = Object.assign(document.createElement('textarea'), { rows: 3 });
+    instructions.append(text);
+    body.append(
+      label,
+      instructions,
+      Object.assign(document.createElement('p'), {
+        textContent:
+          'The study will contain copies of the audio files and fix every rating option as it is set now. ' +
+          'You can edit study.txt in the zip afterwards, e.g. to leave options for raters to choose.',
+      }),
+    );
+    for (;;) {
+      const answer = await ask(body, [
+        { label: 'Save study', value: 'save' as const, primary: true },
+        { label: 'Cancel', value: 'cancel' as const },
+      ], 'Save as study');
+      if (answer === 'cancel') return;
+      if (!title.value.trim()) {
+        await alertBox('Enter a title for the study.');
+        continue;
+      }
+      break;
+    }
+    const s = effectiveSettings(settings);
+    const def: StudyDefinition = {
+      title: title.value.trim(),
+      version: '1',
+      instructions: text.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
+      options: Object.fromEntries((Object.entries(OPTION_KEYS) as [OptionKey, keyof Settings][]).map(([k, o]) => [k, s[o] as boolean])),
+      answerKey: [],
+      showAnswers: false,
+    };
+    try {
+      const files = (src: Source | null) =>
+        Promise.all((src?.items ?? []).map(async (i) => new File([await i.getFile()], i.name, { type: 'audio/wav' })));
+      const zip = await makeStudyZip(def, await files(samples), s.useRefs ? await files(sources.refs) : []);
+      const url = URL.createObjectURL(new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: `${def.title.replace(/[\\/:*?"<>|]/g, '_')}.zip` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      saved.textContent = `Saved the study “${def.title}”.`;
+    } catch (e) {
+      await alertBox(`Couldn't save the study.\n\n${(e as Error).message}`);
+    }
+  }
+
+  // The study panel: what's loaded, and the folder buttons locked while a study supplies the files.
+  if (loaded) {
+    const { title, version } = loaded.definition;
+    q<HTMLElement>('[data-loaded]').textContent =
+      `Study: “${title}”, version ${version} (#${loaded.identity.slice(0, 8)}). Its files are used, and settings marked “set by this study” are fixed.`;
+    if (loaded.warnings.length) {
+      q<HTMLElement>('[data-warnings]').textContent = loaded.warnings.join(' ');
+      q<HTMLElement>('[data-warnings]').hidden = false;
+    }
+    q<HTMLButtonElement>('[data-close-study]').hidden = false;
+    q<HTMLButtonElement>('[data-save-study]').hidden = true;
+    form
+      .querySelectorAll<HTMLButtonElement>('[data-pick], [data-pick-folder], [data-pick-files], [data-reopen]')
+      .forEach((b) => (b.disabled = true));
+  }
 
   // ---- browser-kept results (no folder access) ----
   form.querySelector('[data-download]')?.addEventListener('click', () => void exclusive(async () => {
@@ -372,9 +569,16 @@ ${(e as Error).message}`);
   setSource('samples', sources.samples);
   setSource('refs', sources.refs);
   raterInput.value = rater;
-  form.addEventListener('submit', (e) => {
+  const afterSession: { run?: () => Promise<void> } = {};
+  const takeAfterSession = () => {
+    const run = afterSession.run;
+    afterSession.run = undefined;
+    return run;
+  };
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    void exclusive(async () => {
+    afterSession.run = undefined;
+    await exclusive(async () => {
       rater = raterInput.value;
       const samples = sources.samples;
       createdByStart = undefined;
@@ -391,12 +595,16 @@ ${(e as Error).message}`);
         }
       }
     });
+    const run = takeAfterSession();
+    await run?.();
   });
 
   // ---- the session (the old BtnStart_Click) ----
   async function start() {
+    const study = loaded;
+    const session = effectiveSettings(settings); // a loaded study's fixed options win
     let samples = sources.samples;
-    let refs = settings.useRefs ? sources.refs : null;
+    let refs = session.useRefs ? sources.refs : null;
 
     // Re-read the folders in case files were added or removed since they were chosen.
     try {
@@ -410,7 +618,7 @@ ${(e as Error).message}`);
       return void alertBox("Either you haven't picked a folder, or the one you picked doesn't exist.\nThere's no task for the raters!");
     if (samples.items.length === 0)
       return void alertBox("The folder you picked has no WAV files in it.\nThere's no task for the raters!");
-    if (settings.useRefs && !refs)
+    if (session.useRefs && !refs)
       return void alertBox("You've indicated you'd like to use some reference files.\nHowever, you haven't picked a folder.\nThere are no reference files!");
     if (refs && refs.items.length === 0)
       return void alertBox("You've indicated you'd like to use some reference files.\nHowever, the folder you picked has no WAV files in it.\nThere are no reference files!");
@@ -461,7 +669,7 @@ ${(e as Error).message}`);
       return;
 
     // ---- rate ----
-    const ratedBox = await runRating(root, samples.items, refs?.items ?? null, settings);
+    const ratedBox = await runRating(root, samples.items, refs?.items ?? null, { ...session, instructions: study?.definition.instructions });
     lines.push(
       buildRow({
         rater,
@@ -484,6 +692,15 @@ ${(e as Error).message}`);
     showSetup(root);
     root.querySelector<HTMLElement>('.saved')!.textContent = message;
     refreshKept();
+    // Shown once the session (and its lock) is over, so other windows aren't kept waiting.
+    if (study?.definition.showAnswers && study.definition.answerKey.length) afterSession.run = () => showAnswers(study, ratedBox);
+  }
+
+  // A ?study=<address of a .zip> link opens that study once, when NeAR starts.
+  if (!linkChecked) {
+    linkChecked = true;
+    const link = new URLSearchParams(location.search).get('study');
+    if (link) void openFromUrl(link, `Couldn't open the study at ${link}. The server holding it may not allow downloads from other web sites.`, 'Study loaded: press Start.');
   }
 }
 
@@ -543,26 +760,6 @@ async function writeResults(
       }
     }
   }
-}
-
-/** Fetches the example set from public/examples/ (see scripts/make-examples.mjs). */
-async function loadExamples(): Promise<{ samples: Source; refs: Source }> {
-  const base = new URL('./examples/', document.baseURI);
-  const get = async (path: string) => {
-    const res = await fetch(new URL(path, base));
-    if (!res.ok) throw new Error(`${path}: ${res.status} ${res.statusText}`);
-    return res;
-  };
-  const list = (await (await get('examples.json')).json()) as { samples: string[]; references: string[] };
-  const files = (paths: string[]) =>
-    Promise.all(
-      paths.map(async (p) => new File([await (await get(p)).blob()], p.split('/').pop()!, { type: 'audio/wav' })),
-    );
-  const [samples, refs] = await Promise.all([files(list.samples), files(list.references)]);
-  return {
-    samples: { ...sourceFromFiles(samples, 'samples'), label: 'Example files' },
-    refs: { ...sourceFromFiles(refs, 'refs'), label: 'Example references' },
-  };
 }
 
 /**

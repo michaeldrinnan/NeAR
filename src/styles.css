@@ -62,6 +62,8 @@ a.button {
   text-decoration: none;
 }
 a.button:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:disabled:hover { border-color: var(--border); }
 
 .banner {
   display: flex;
@@ -244,3 +246,20 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .demo .row { align-items: center; }
 .demo a:not(.button) { color: var(--tone-text); }
 .demo .status { margin-top: 10px; }
+
+.study-instructions {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+.study-instructions p { margin: 2px 0; }
+.study-instructions[hidden] { display: none; }
+.locked-note { color: var(--muted); font-style: italic; }
+.warnings { color: #b45309; }
+.tone-green  { --tone: #3f9b46; --tone-bg: #eaf6ea; --tone-text: #2c6e31; }
+@media (prefers-color-scheme: dark) {
+  .tone-green  { --tone: #5fbf66; --tone-bg: #132a15; --tone-text: #a6e3aa; }
+}
+.study-form textarea { width: 100%; font: inherit; }

@@ -66,7 +66,8 @@ show_answers  = no
   later version still loads. Invalid values (e.g. `random = maybe`) stop loading with a
   message naming the line.
 - The answer key is never shown while rating. When `show_answers = yes`, after the
-  session NeAR shows the rater's order beside the key and the Spearman rank correlation.
+  session has been saved NeAR shows the rater's order beside the key and the Spearman rank
+  correlation (over the samples rated; unrated ones are left out).
 
 ## 3. Loading a study
 

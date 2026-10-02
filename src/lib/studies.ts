@@ -8,8 +8,8 @@ export interface Study {
   fingerprint: string;
   created: string;
   lines: string[] | null;
-  /** Internal marker for studies NeAR creates itself; never set from anything the user types. */
-  builtin?: 'examples';
+  /** For a loaded study package: its identity (docs/study-format.md §5). Never set from anything the user types. */
+  format?: string;
 }
 
 const key = (id: string) => `study:${id}`;
@@ -51,12 +51,12 @@ export async function createStudy(
   source: Source,
   name: string,
   lines: string[] | null = null,
-  builtin?: Study['builtin'],
+  format?: string,
 ): Promise<Study> {
   if (!name.trim()) throw new Error('Enter a study name.');
   const study: Study = {
     id: crypto.randomUUID(), name: name.trim(), fingerprint: await fingerprintSource(source),
-    created: new Date().toISOString(), lines, ...(builtin ? { builtin } : {}),
+    created: new Date().toISOString(), lines, ...(format ? { format } : {}),
   };
   await kvSet(key(study.id), study);
   return study;
@@ -119,16 +119,21 @@ export async function commitStudy(id: string, lines: readonly string[], expected
   return committed;
 }
 
-/** The built-in study for the bundled example files, created on first use. */
-export async function exampleStudy(source: Source): Promise<Study> {
-  const fingerprint = await fingerprintSource(source);
-  // Found by NeAR's own marker, never by name, so a user study that happens to be called
-  // "Example files" and hold the same recordings is never used for demo sessions.
-  const existing = (await listStudies()).find((s) => s.builtin === 'examples' && s.fingerprint === fingerprint);
-  return existing ?? createStudy(source, EXAMPLE_STUDY, null, 'examples');
+/**
+ * The browser study holding results for a loaded study package. Found by the package's
+ * identity only — never by name — so results attach to exactly that design and audio,
+ * and an ordinary study with the same name or recordings is never used.
+ */
+export async function packageStudy(source: Source, identity: string, name: string): Promise<Study> {
+  // One record per package, at a key derived from its identity, created only if absent in a
+  // single transaction: two windows opening the same package at once can't make two.
+  const id = `pkg-${identity}`;
+  const fresh: Study = {
+    id, name: name.trim(), fingerprint: await fingerprintSource(source), created: new Date().toISOString(), lines: null, format: identity,
+  };
+  await kvUpdate<Study>(key(id), (current) => (current ? null : { put: fresh }));
+  return readStudy(id);
 }
-
-export const EXAMPLE_STUDY = 'Example files';
 
 export async function legacyResults(): Promise<{ key: string; lines: string[] }[]> {
   const keys = (await kvKeys()).filter((k): k is string => typeof k === 'string' && k.startsWith('results:'));

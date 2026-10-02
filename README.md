@@ -28,12 +28,20 @@ npm run test:e2e  # end-to-end demo session in Google Chrome (after a build)
 Deploy by copying `dist/` to any static HTTPS host (GitHub Pages, Netlify, a university
 web server…). The build uses relative paths, so it also works from a sub-folder.
 
+## Study packages
+
+A study is a plain `.zip` with a human-editable `study.txt` plus `TestItems/` and optional
+`RefItems/` WAV folders; options it sets to yes/no are fixed, blank ones are left to the rater.
+Open one with **Open study…**, a link such as `…/NeAR/?study=<address of the zip>`, or the built-in
+example; **Save as study…** writes the current set-up as a package. Full specification:
+[docs/study-format.md](docs/study-format.md).
+
 ## Example files
 
-`public/examples/` holds a demo set: 8 synthetic “ah” vowels with increasing hoarseness to rate
-(`TestItems/`) and 5 references (`RefItems/`), plus `ANSWER-KEY.txt` and a zip of the lot. The app's
-*Try with example files* button loads them directly; the zip is for practising with real folders.
-Regenerate them with `npm run examples`.
+`public/examples/` holds a demo study: 8 synthetic “ah” vowels with increasing hoarseness to rate
+(`TestItems/`), 5 references (`RefItems/`), `study.txt` (with an answer key, shown after the session)
+and `ANSWER-KEY.txt`; `NeAR-examples.zip` is the same study as a package. The app's
+*Try with example files* button opens it. Regenerate them with `npm run examples`.
 
 ## Browsers
 

@@ -22,11 +22,13 @@ test('a demo session with the example files saves the expected ranks', async ({ 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Try with example files' }).click();
-  await expect(page.locator('[data-status="samples"]')).toHaveText('Rating 8 WAV files in “Example files”.');
-  await expect(page.locator('[data-status="refs"]')).toHaveText('Using 5 WAV files as reference in “Example references”.');
+  // The examples are a built-in study package: its files, its own results, its settings.
+  await expect(page.locator('[data-status="samples"]')).toHaveText(/^Rating 8 WAV files in “Example files v1 #[0-9a-f]{8}”\.$/);
+  await expect(page.locator('[data-status="refs"]')).toHaveText('Using 5 WAV files as reference in “RefItems”.');
+  await expect(page.locator('[data-loaded]')).toContainText('Study: “Example files”, version 1');
   await expect(page.locator('#rater')).toHaveValue('Demo');
-  // The examples have their own built-in study, so the demo needs no study choice: just Start.
-  await expect(page.locator('[data-kept]')).toHaveText('No results kept in this browser for “Example files” yet.');
+  await expect(page.locator('[data-kept]')).toHaveText('No results kept in this browser for “Example files v1” yet.');
+  await expect(page.locator('input[name="useRefs"]')).toBeDisabled(); // references come from the package
   const animate = page.locator('input[name="animate"]');
   await expect(animate).toBeChecked(); // on by default
   if (testInfo.project.name === 'not-animated') await animate.uncheck();
@@ -35,6 +37,8 @@ test('a demo session with the example files saves the expected ranks', async ({ 
 
   // Instructions are plain paragraphs (a stray flex layout once split them around the bold 'Play').
   await expect(page.locator('.rating p.hint').first()).toHaveCSS('display', 'block');
+  // The study's own instructions are shown above the boxes.
+  await expect(page.locator('.study-instructions')).toContainText('Rank them from the clearest voice');
 
   const rated = page.locator('.box.rated');
   await expect(rated.locator('.tile.ref')).toHaveCount(5);
@@ -81,6 +85,9 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await page.getByRole('button', { name: 'Yes' }).click();
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(page.locator('.saved')).toContainText('Saved to this browser');
+  // The study has show_answers = yes: after saving, the rater sees their order beside the answer key.
+  await expect(page.locator('dialog')).toContainText("Agreement (Spearman's rank correlation): 1.00, over 8 samples.");
+  await page.getByRole('button', { name: 'OK' }).click();
 
   const lines = await page.evaluate(
     () =>
@@ -110,8 +117,8 @@ test('a demo session with the example files saves the expected ranks', async ({ 
     'Demo',
     expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     expect.stringMatching(/^\d{2}:\d{2}:\d{2}$/),
-    'Example files',
-    'Example references',
+    expect.stringMatching(/^Example files v1 #[0-9a-f]{8}$/),
+    'RefItems',
     '5',
   ]);
   // References fill ranks 1-5, so the samples follow from 6 in answer-key order.
@@ -157,7 +164,7 @@ test('dragging to the edge of the window scrolls to boxes that are off screen', 
 });
 
 // Playwright hands files over as Node buffers; declared here so the browser-side tsconfig needn't load Node's types.
-declare const Buffer: { from(data: string): unknown };
+declare const Buffer: { from(data: string | Uint8Array): unknown };
 
 /** "Choose files…" route (iPad, Safari, Firefox): every pick is labelled "Selected files". */
 async function pickFiles(page: Page, files: Record<string, string>) {
@@ -434,39 +441,6 @@ test('abandoning a Start never removes a study that already existed, even an emp
   await expect(page.locator('dialog option').filter({ hasText: 'Existing but empty' })).toHaveCount(1);
 });
 
-test('the demo uses its own built-in study, not a user study with the same name and recordings', async ({ page }) => {
-  await page.goto('/');
-  await page.locator('input[name="canLeave"]').check();
-  await page.getByRole('button', { name: 'Try with example files' }).click();
-  await expect(page.locator('[data-status="samples"]')).toContainText('Rating 8 WAV files');
-  // Make a study of one's own from the example recordings, and call it "Example files" too.
-  await chooseNewStudy(page, 'Example files');
-
-  // Loading the examples again picks NeAR's built-in study; a demo session goes there.
-  await page.getByRole('button', { name: 'Try with example files' }).click();
-  await expect(page.locator('[data-kept]')).toContainText('“Example files”');
-  await quickSession(page, 'Demo');
-
-  const studies = await page.evaluate(
-    () =>
-      new Promise<{ name: string; builtin?: string; lines: string[] | null }[]>((resolve, reject) => {
-        const open = indexedDB.open('near');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const store = open.result.transaction('kv').objectStore('kv');
-          const all = store.getAll();
-          all.onsuccess = () => resolve((all.result as { name?: string }[]).filter((v) => v && typeof v === 'object' && 'name' in v) as never);
-          all.onerror = () => reject(all.error);
-        };
-      }),
-  );
-  const builtin = studies.filter((s) => s.builtin === 'examples');
-  const own = studies.filter((s) => s.name === 'Example files' && !s.builtin);
-  expect(builtin).toHaveLength(1);
-  expect(own).toHaveLength(1);
-  expect(builtin[0].lines).toHaveLength(2); // header + the demo session
-  expect(own[0].lines).toBeNull(); // the user's own study is untouched
-});
 
 test('only one NeAR session runs at a time across windows, and the download after saving matches what was saved', async ({ context }) => {
   const busy = 'A session is already active in another NeAR window. Finish or close it before continuing.';
@@ -490,7 +464,7 @@ test('only one NeAR session runs at a time across windows, and the download afte
   };
   await refused(() => b.getByRole('button', { name: 'Start', exact: true }).click());
   await refused(() => b.getByRole('button', { name: 'Download NeAR.csv' }).click());
-  await refused(() => b.locator('[data-study]').click());
+  await refused(() => b.getByRole('button', { name: 'Recover older results…' }).click()); // (a loaded study has no study chooser)
   await refused(() =>
     b.locator('[data-input-csv]').setInputFiles({ name: 'NeAR.csv', mimeType: 'text/csv', buffer: Buffer.from('RATER,DATE\r\n') as never }),
   );
@@ -516,7 +490,7 @@ test('only one NeAR session runs at a time across windows, and the download afte
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
           const all = open.result.transaction('kv').objectStore('kv').getAll();
-          all.onsuccess = () => resolve((all.result as { builtin?: string; lines: string[] }[]).find((v) => v?.builtin === 'examples')!.lines);
+          all.onsuccess = () => resolve((all.result as { format?: string; lines: string[] }[]).find((v) => v?.format)!.lines);
           all.onerror = () => reject(all.error);
         };
       }),

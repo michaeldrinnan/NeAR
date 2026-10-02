@@ -11,6 +11,8 @@ export interface RatingOptions {
   showCount: boolean;
   canLeave: boolean;
   animate: boolean;
+  /** Instructions from a loaded study, shown above the boxes. */
+  instructions?: readonly string[];
 }
 
 /**
@@ -28,6 +30,7 @@ export function runRating(
       <p class="hint">In the top box you should arrange the rated samples. Click <b>Play</b> to listen,
         then drag them around until you are happy with the order.
         ${refs ? 'The plain blue samples are references; their order cannot be changed.' : ''}</p>
+      <div class="study-instructions" hidden></div>
       <p class="best">Put the BEST sample here at top left.</p>
       <div class="box rated" aria-label="Rated samples"></div>
       <p class="hint">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
@@ -42,6 +45,11 @@ export function runRating(
       </div>
     </section>`;
 
+  if (opts.instructions?.length) {
+    const box = root.querySelector<HTMLElement>('.study-instructions')!;
+    for (const line of opts.instructions) box.append(Object.assign(document.createElement('p'), { textContent: line }));
+    box.hidden = false;
+  }
   const ratedBox = root.querySelector<HTMLElement>('.rated')!;
   const unratedBox = root.querySelector<HTMLElement>('.unrated')!;
   const countLabel = root.querySelector<HTMLElement>('.count')!;

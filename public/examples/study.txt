@@ -1,0 +1,14 @@
+# NeAR study definition: the example files bundled with NeAR.
+# Options left blank can be changed by the rater.
+title         = Example files
+version       = 1
+instructions  = Synthetic sustained "ah" vowels with increasing hoarseness.
+instructions  = Rank them from the clearest voice (top left) to the roughest.
+random        =
+numbers       =
+names         =
+play_count    =
+leave_unrated =
+animate       =
+answer_key    = sample-E, sample-B, sample-G, sample-A, sample-H, sample-D, sample-F, sample-C
+show_answers  = yes

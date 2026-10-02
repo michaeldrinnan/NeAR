@@ -32,11 +32,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         // Opening the manual or the examples zip is a navigation; don't answer it with the app shell.
         navigateFallbackDenylist: [/\/manual\//, /\/examples\//, /\.pdf$/i],
-        // Example audio is fetched on demand, then kept for offline demos.
+        // Example study files are fetched on demand, then kept for offline demos.
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.includes('/examples/'),
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst', // fresh after an update, cached for offline use
             options: { cacheName: 'near-examples' },
           },
         ],

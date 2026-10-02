@@ -18,7 +18,9 @@ function field<T extends HTMLElement>(body: HTMLElement, title: string, control:
 export type StudyChoice = false | { created: boolean };
 
 export async function chooseStudy(source: Source): Promise<StudyChoice> {
-  const [fingerprint, studies] = await Promise.all([fingerprintSource(source), listStudies()]);
+  const [fingerprint, all] = await Promise.all([fingerprintSource(source), listStudies()]);
+  // Results of a loaded study package belong to that package; they can't be continued from loose files.
+  const studies = all.filter((s) => !s.format);
   const body = document.createElement('div');
   body.className = 'study-form';
   const intro = document.createElement('p');
@@ -46,12 +48,12 @@ export async function chooseStudy(source: Source): Promise<StudyChoice> {
   for (;;) {
     const answer = await ask(body, [
       { label: 'Continue', value: 'continue', primary: true },
-      ...(studies.length ? [{ label: 'Delete…', value: 'delete' as const }] : []),
+      ...(all.length ? [{ label: 'Delete…', value: 'delete' as const }] : []),
       { label: 'Cancel', value: 'cancel' },
     ], 'Choose a study');
     if (answer === 'cancel') return false;
     if (answer === 'delete') {
-      await deleteStudies(source, studies);
+      await deleteStudies(source, all);
       return chooseStudy(source); // start again with the remaining studies
     }
     if (select.value === 'new') {

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { commitStudy, createStudy, discardIfEmpty, exampleStudy, listStudies, readStudy, StudyConflictError, writeStudy } from '../src/lib/studies';
+import { commitStudy, createStudy, discardIfEmpty, listStudies, packageStudy, readStudy, StudyConflictError, writeStudy } from '../src/lib/studies';
 import type { Source } from '../src/lib/sources';
 
 /** A study source whose recordings are the given strings. */
@@ -89,14 +89,14 @@ describe('browser studies in IndexedDB', () => {
     await expect(commitStudy(study.id, [H, row('Late')], null)).rejects.toThrow(/could not be found/);
   });
 
-  it('uses only its own built-in study for the examples, never a user study with the same name and recordings', async () => {
+  it('keeps a study package’s results under its identity, never in a look-alike ordinary study', async () => {
     const examples = source('Example files', { 'sample-A.wav': 'xyz', 'sample-B.wav': 'pqr' });
-    const users = await createStudy(examples, 'Example files'); // a user-made study that looks just like it
-    const builtin = await exampleStudy(examples);
-    expect(builtin.id).not.toBe(users.id);
-    expect(builtin.builtin).toBe('examples');
-    expect(builtin.name).toBe('Example files');
-    // Later demos reuse the same built-in study.
-    expect((await exampleStudy(source('Example files', { 'sample-A.wav': 'xyz', 'sample-B.wav': 'pqr' }))).id).toBe(builtin.id);
+    const users = await createStudy(examples, 'Example files v1'); // an ordinary study that looks just like it
+    const pkg = await packageStudy(examples, 'identity-1', 'Example files v1');
+    expect(pkg.id).not.toBe(users.id);
+    expect(pkg.format).toBe('identity-1');
+    // Loading the same package again finds the same study; a changed package (new identity) gets its own.
+    expect((await packageStudy(examples, 'identity-1', 'Example files v1')).id).toBe(pkg.id);
+    expect((await packageStudy(examples, 'identity-2', 'Example files v2')).id).not.toBe(pkg.id);
   });
 });

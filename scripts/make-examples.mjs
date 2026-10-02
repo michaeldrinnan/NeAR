@@ -178,7 +178,27 @@ const key = [
   '',
 ].join('\r\n');
 
+// The examples are also a NeAR study package (docs/study-format.md): study.txt plus the folders.
+const study = [
+  '# NeAR study definition: the example files bundled with NeAR.',
+  '# Options left blank can be changed by the rater.',
+  'title         = Example files',
+  'version       = 1',
+  'instructions  = Synthetic sustained "ah" vowels with increasing hoarseness.',
+  'instructions  = Rank them from the clearest voice (top left) to the roughest.',
+  'random        =',
+  'numbers       =',
+  'names         =',
+  'play_count    =',
+  'leave_unrated =',
+  'animate       =',
+  `answer_key    = ${bestFirst.join(', ')}`,
+  'show_answers  = yes',
+  '',
+].join('\r\n');
+
 for (const [name, data] of files) writeFileSync(new URL(name, OUT), data);
+writeFileSync(new URL('study.txt', OUT), study);
 writeFileSync(new URL('ANSWER-KEY.txt', OUT), key);
 writeFileSync(
   new URL('examples.json', OUT),
@@ -190,6 +210,6 @@ writeFileSync(
 );
 writeFileSync(
   new URL('NeAR-examples.zip', OUT),
-  zip([...files.map(([n, d]) => [`NeAR-examples/${n}`, d]), ['NeAR-examples/ANSWER-KEY.txt', Buffer.from(key)]]),
+  zip([['study.txt', Buffer.from(study)], ...files, ['ANSWER-KEY.txt', Buffer.from(key)]]),
 );
 console.log(key);
