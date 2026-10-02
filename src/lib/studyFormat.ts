@@ -3,7 +3,7 @@
  * TestItems/*.wav and optionally RefItems/*.wav.
  */
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
-import { compareNtfs, isWav, stem } from './order';
+import { compareNtfs, isWav } from './order';
 import type { RatingOptions } from '../ui/rating';
 
 export const STUDY_FILE = 'study.txt';
@@ -26,8 +26,6 @@ export interface StudyDefinition {
   instructions: string[];
   /** Fixed options only; a missing key means the rater may choose. */
   options: Partial<Record<OptionKey, boolean>>;
-  answerKey: string[];
-  showAnswers: boolean;
 }
 
 export class StudyFormatError extends Error {
@@ -50,7 +48,7 @@ function yesNo(value: string, line: number, key: string): boolean | undefined {
 
 /** Reads study.txt. Unknown keys are returned as warnings; invalid values throw, naming the line. */
 export function parseStudyText(text: string): { definition: StudyDefinition; warnings: string[] } {
-  const def: StudyDefinition = { title: '', version: '1', instructions: [], options: {}, answerKey: [], showAnswers: false };
+  const def: StudyDefinition = { title: '', version: '1', instructions: [], options: {} };
   const warnings: string[] = [];
   const lines = text.replace(/^﻿/, '').split(/\r\n|\n|\r/);
   lines.forEach((raw, i) => {
@@ -69,10 +67,6 @@ export function parseStudyText(text: string): { definition: StudyDefinition; war
       const v = yesNo(value, line, key);
       if (v === undefined) delete def.options[key as OptionKey];
       else def.options[key as OptionKey] = v;
-    } else if (key === 'answer_key') {
-      def.answerKey = value.split(',').map((s) => s.trim().replace(/\.wav$/i, '')).filter(Boolean);
-    } else if (key === 'show_answers') {
-      def.showAnswers = yesNo(value, line, key) ?? false;
     } else {
       warnings.push(`${STUDY_FILE}, line ${line}: unknown setting “${key}” ignored.`);
     }
@@ -91,8 +85,6 @@ export function writeStudyText(def: StudyDefinition): string {
     `version       = ${def.version}`,
     ...(def.instructions.length ? def.instructions.map((l) => `instructions  = ${l}`) : ['instructions  =']),
     ...Object.keys(OPTION_KEYS).map((k) => `${k.padEnd(13)} = ${yn(def.options[k as OptionKey])}`),
-    `answer_key    = ${def.answerKey.join(', ')}`,
-    `show_answers  = ${def.showAnswers ? 'yes' : 'no'}`,
     '',
   ];
   return out.join('\r\n');
@@ -117,8 +109,6 @@ function normalised(def: StudyDefinition) {
     version: def.version,
     instructions: def.instructions,
     options: Object.keys(OPTION_KEYS).map((k) => [k, def.options[k as OptionKey] ?? null]),
-    answerKey: def.answerKey,
-    showAnswers: def.showAnswers,
   };
 }
 
@@ -157,9 +147,6 @@ export async function readStudyZip(bytes: Uint8Array): Promise<StudyPackage> {
   const samples = filesIn('TestItems');
   const references = filesIn('RefItems');
   if (!samples.length) throw new StudyFormatError('The package has no WAV files in TestItems/.');
-  const stems = new Set(samples.map((f) => stem(f.name)));
-  const unknown = definition.answerKey.filter((k) => !stems.has(k));
-  if (unknown.length) warnings.push(`answer_key names files that aren't in TestItems/: ${unknown.join(', ')}.`);
   return { definition, warnings, samples, references, identity: await studyIdentity(definition, samples, references) };
 }
 
@@ -179,21 +166,4 @@ export async function makeStudyZip(def: StudyDefinition, samples: File[], refere
 /** "Title vVERSION #HASH8", written to the SOURCE column. */
 export function sourceLabel(pkg: Pick<StudyPackage, 'definition' | 'identity'>): string {
   return `${pkg.definition.title} v${pkg.definition.version} #${pkg.identity.slice(0, 8)}`;
-}
-
-/**
- * Spearman's rank correlation between the rater's order and the answer key, over the
- * samples that appear in both (unrated samples are left out). Null if fewer than two.
- */
-export function compareWithKey(raterBestFirst: readonly string[], key: readonly string[]): { rho: number | null; n: number } {
-  const common = raterBestFirst.filter((s) => key.includes(s));
-  const n = common.length;
-  if (n < 2) return { rho: null, n };
-  const keyOrder = key.filter((s) => common.includes(s));
-  let d2 = 0;
-  common.forEach((s, i) => {
-    const d = i - keyOrder.indexOf(s);
-    d2 += d * d;
-  });
-  return { rho: 1 - (6 * d2) / (n * (n * n - 1)), n };
 }

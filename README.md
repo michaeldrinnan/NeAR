@@ -41,8 +41,8 @@ example; **Save as study…** writes the current set-up as a package. Full speci
 Built-in example studies live in `public/studies/` and are listed in `public/studies/index.json`;
 the start screen offers them in a list (*Try with example files*), with a download link for each.
 To add one, drop its zip in that folder and add a line to `index.json`. The two bundled examples
-use 8 synthetic “ah” vowels with increasing hoarseness (one with 5 references, one in random order
-without), each with an answer key. `public/examples/` holds the same voices unpacked for the tests.
+use 8 synthetic “ah” vowels with varying hoarseness (one with 5 references, one in random order
+without). `public/examples/` holds the same voices unpacked for the tests.
 Regenerate them with `npm run examples`.
 
 ## Browsers

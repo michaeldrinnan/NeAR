@@ -15,9 +15,9 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
 
 test('a demo session with the example files saves the expected ranks', async ({ page, request }, testInfo) => {
   const examples = (await (await request.get('examples/examples.json')).json()) as Examples;
-  const key = await (await request.get('examples/ANSWER-KEY.txt')).text();
-  const keyLines = key.split(/\r?\n/);
-  const bestFirst = keyLines[keyLines.findIndex((l) => l.startsWith('Answer key')) + 1].trim().split(', ');
+  // The order this test rates the samples in: any order will do (there is no "right" order),
+  // so use one that differs from the files' own order to check the saved ranks properly.
+  const bestFirst = examples.samples.map((p) => p.split('/').pop()!.replace(/\.wav$/, '')).reverse();
   expect(bestFirst).toHaveLength(8);
 
   await page.goto('/');
@@ -85,9 +85,7 @@ test('a demo session with the example files saves the expected ranks', async ({ 
   await page.getByRole('button', { name: 'Yes' }).click();
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(page.locator('.saved')).toContainText('Saved to this browser');
-  // The study has show_answers = yes: after saving, the rater sees their order beside the answer key.
-  await expect(page.locator('dialog')).toContainText("Agreement (Spearman's rank correlation): 1.00, over 8 samples.");
-  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.locator('dialog')).toHaveCount(0); // nothing is "marked": NeAR has no answer key
 
   const lines = await page.evaluate(
     () =>
@@ -121,7 +119,7 @@ test('a demo session with the example files saves the expected ranks', async ({ 
     'RefItems',
     '5',
   ]);
-  // References fill ranks 1-5, so the samples follow from 6 in answer-key order.
+  // References fill ranks 1-5, so the samples follow from 6 in the order they were placed.
   const expected = names.map((n) => String(6 + bestFirst.indexOf(n.replace(/\.wav$/, ''))));
   expect(row.slice(6)).toEqual(expected);
 

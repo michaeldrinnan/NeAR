@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import {
-  compareWithKey,
   makeStudyZip,
   parseStudyText,
   readStudyZip,
@@ -22,12 +21,10 @@ random        = yes
 numbers       = no
 play_count    =            # blank: the rater may choose
 LEAVE_UNRATED = Off
-answer_key    = b, a.wav, c
-show_answers  = yes
 `;
 
 describe('study.txt', () => {
-  it('reads titles, multi-line instructions, fixed and blank options, and the answer key', () => {
+  it('reads titles, multi-line instructions, and fixed and blank options', () => {
     const { definition, warnings } = parseStudyText(EXAMPLE);
     expect(warnings).toEqual([]);
     expect(definition).toEqual({
@@ -35,14 +32,12 @@ describe('study.txt', () => {
       version: '2',
       instructions: ['Rank by overall severity.', 'Least severe at top left.'],
       options: { random: true, numbers: false, leave_unrated: false },
-      answerKey: ['b', 'a', 'c'],
-      showAnswers: true,
     });
   });
 
-  it('defaults to version 1, nothing fixed and answers hidden', () => {
+  it('defaults to version 1 with nothing fixed', () => {
     expect(parseStudyText('title = Minimal').definition).toEqual({
-      title: 'Minimal', version: '1', instructions: [], options: {}, answerKey: [], showAnswers: false,
+      title: 'Minimal', version: '1', instructions: [], options: {},
     });
   });
 
@@ -60,7 +55,6 @@ describe('study.txt', () => {
   it('writes a file that reads back to the same definition', () => {
     const def: StudyDefinition = {
       title: 'Round trip', version: '1', instructions: ['One', 'Two'], options: { random: false, animate: true },
-      answerKey: ['x', 'y'], showAnswers: false,
     };
     expect(parseStudyText(writeStudyText(def)).definition).toEqual(def);
   });
@@ -98,9 +92,13 @@ describe('study packages', () => {
     await expect(readStudyZip(zipSync({ 'study.txt': strToU8('title = T') }))).rejects.toThrow(/no WAV files in TestItems/);
   });
 
-  it('warns when the answer key names files that are not in the study', async () => {
-    const pkg = await readStudyZip(await makeStudyZip({ ...def, answerKey: ['a', 'missing'] }, [wav('a.wav')], []));
-    expect(pkg.warnings).toEqual(["answer_key names files that aren't in TestItems/: missing."]);
+  it('loads older study files that still have answer-key lines, ignoring them with a warning', async () => {
+    const { definition, warnings } = parseStudyText('title = Old\nanswer_key = a, b\nshow_answers = yes\n');
+    expect(definition.title).toBe('Old');
+    expect(warnings).toEqual([
+      'study.txt, line 2: unknown setting “answer_key” ignored.',
+      'study.txt, line 3: unknown setting “show_answers” ignored.',
+    ]);
   });
 
   it('gives the same identity regardless of comments and layout, and a new one for any real change', async () => {
@@ -118,14 +116,5 @@ describe('study packages', () => {
     expect(await changed({ ...def, options: { ...def.options, animate: true } })).not.toBe(base.identity);
     expect(await changed(def, [wav('a.wav', 'other audio'), wav('b.wav'), wav('c.wav')])).not.toBe(base.identity);
     expect(sourceLabel(base)).toBe(`Dysphonia ranking 2026 v2 #${base.identity.slice(0, 8)}`);
-  });
-});
-
-describe('answer key comparison', () => {
-  it('scores perfect, reversed and partial orders with Spearman’s rho', () => {
-    expect(compareWithKey(['a', 'b', 'c', 'd'], ['a', 'b', 'c', 'd'])).toEqual({ rho: 1, n: 4 });
-    expect(compareWithKey(['d', 'c', 'b', 'a'], ['a', 'b', 'c', 'd'])).toEqual({ rho: -1, n: 4 });
-    expect(compareWithKey(['b', 'a', 'c'], ['a', 'b', 'c', 'd']).rho).toBeCloseTo(0.5); // d unrated: left out
-    expect(compareWithKey(['a'], ['a', 'b'])).toEqual({ rho: null, n: 1 });
   });
 });

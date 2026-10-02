@@ -15,7 +15,6 @@ import { runRating, type RatingOptions } from './rating';
 import { chooseStudy, recoverResults } from './studies';
 import { discardIfEmpty, packageStudy, readStudy } from '../lib/studies';
 import {
-  compareWithKey,
   makeStudyZip,
   OPTION_KEYS,
   readStudyZip,
@@ -24,7 +23,6 @@ import {
   type StudyDefinition,
   type StudyPackage,
 } from '../lib/studyFormat';
-import { stem } from '../lib/order';
 
 const OPTIONS_KEY = 'near.options';
 
@@ -147,25 +145,6 @@ function lockedSettings(): Set<keyof Settings> {
     if (loaded.definition.options[key] !== undefined) locked.add(option);
   }
   return locked;
-}
-
-/** After a session: the rater's order beside the study's answer key, with Spearman's rho. */
-async function showAnswers(pkg: StudyPackage, ratedBox: readonly string[]) {
-  const order = ratedBox.filter((id) => id.startsWith('s:')).map((id) => stem(id.slice(2)));
-  const key = pkg.definition.answerKey;
-  const { rho, n } = compareWithKey(order, key);
-  const left = key.filter((k) => !order.includes(k));
-  await ask(
-    `How your order compares with the answer key for “${pkg.definition.title}”:\n\n` +
-      `Your order (best first):  ${order.join(', ') || '(none rated)'}\n` +
-      `Answer key (best first):  ${key.join(', ')}\n\n` +
-      (rho === null
-        ? 'Too few samples were rated to compare.'
-        : `Agreement (Spearman's rank correlation): ${rho.toFixed(2)}, over ${n} samples.`) +
-      (left.length ? `\nUnrated samples were left out: ${left.join(', ')}.` : ''),
-    [{ label: 'OK', value: 'ok', primary: true }],
-    'Answer key',
-  );
 }
 
 /** The start-settings screen (the old DlgStart form) and the session flow behind its Start button. */
@@ -534,8 +513,6 @@ export function showSetup(root: HTMLElement): void {
       version: '1',
       instructions: text.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
       options: Object.fromEntries((Object.entries(OPTION_KEYS) as [OptionKey, keyof Settings][]).map(([k, o]) => [k, s[o] as boolean])),
-      answerKey: [],
-      showAnswers: false,
     };
     try {
       const files = (src: Source | null) =>
@@ -607,16 +584,9 @@ ${(e as Error).message}`);
   setSource('samples', sources.samples);
   setSource('refs', sources.refs);
   raterInput.value = rater;
-  const afterSession: { run?: () => Promise<void> } = {};
-  const takeAfterSession = () => {
-    const run = afterSession.run;
-    afterSession.run = undefined;
-    return run;
-  };
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
-    afterSession.run = undefined;
-    await exclusive(async () => {
+    void exclusive(async () => {
       rater = raterInput.value;
       const samples = sources.samples;
       createdByStart = undefined;
@@ -633,8 +603,6 @@ ${(e as Error).message}`);
         }
       }
     });
-    const run = takeAfterSession();
-    await run?.();
   });
 
   // ---- the session (the old BtnStart_Click) ----
@@ -730,8 +698,6 @@ ${(e as Error).message}`);
     showSetup(root);
     root.querySelector<HTMLElement>('.saved')!.textContent = message;
     refreshKept();
-    // Shown once the session (and its lock) is over, so other windows aren't kept waiting.
-    if (study?.definition.showAnswers && study.definition.answerKey.length) afterSession.run = () => showAnswers(study, ratedBox);
   }
 
   // A ?study=<address of a .zip> link opens that study once, when NeAR starts.
