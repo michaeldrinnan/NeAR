@@ -1,0 +1,331 @@
+<title>NeAR Start Screen Mock-up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:ital,wght@1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column like the real app; a header, a breadcrumb, and one screen at a time. Dark only, matching NeAR. */
+:root{
+  color-scheme:dark;
+  --bg:#0c0e11; --panel:#15181d; --line:#2a2f37; --fg:#e8ebef; --muted:#9aa3ae;
+  --rate:#2b6cb0; --rate-bg:#13243a;
+  --create:#2f855a; --create-bg:#132c21;
+  --results:#b7791f; --results-bg:#33260f;
+  --new:#c2456e; --new-bg:#361421;
+  --sent:#2c9a9a; --sent-bg:#0f2c2e;
+  --focus:#7fb3ff;
+  --sans:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--sans);padding-inline:16px;padding-block:0 48px}
+.mock{background:#3a2f12;color:#f3d98b;font-size:13px;text-align:center;padding:6px 12px;margin-inline:-16px}
+header{display:flex;align-items:center;gap:12px;max-width:760px;margin:0 auto;padding-block:14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header .logo{font-weight:700;font-size:22px;letter-spacing:.02em;cursor:pointer}
+header .logo small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+header .sp{flex:1}
+main{max-width:760px;margin:0 auto;padding-top:20px;display:grid;gap:16px}
+h1{font-size:24px;margin:0;text-wrap:balance}
+h2{font-size:18px;margin:0}
+p{margin:0}
+.muted{color:var(--muted)}
+.nav{display:flex;gap:10px}
+.btn.big{font-size:18px;padding:10px 20px;font-weight:700}
+.who{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+button,select,input{font:inherit;color:inherit}
+.btn{background:#232830;border:1px solid #3a414c;border-radius:6px;padding:8px 14px;cursor:pointer}
+.btn:hover{background:#2c323b}
+.btn.primary{background:var(--accent,var(--rate));border-color:transparent;color:#fff;font-weight:700}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.card:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.linkish{background:none;border:0;color:var(--focus);cursor:pointer;padding:0;text-decoration:underline}
+.panel{background:var(--tint,var(--panel));border:1px solid var(--line);border-left:4px solid var(--accent,var(--line));border-radius:8px;padding:16px;display:grid;gap:12px}
+.rate{--accent:var(--rate);--tint:var(--rate-bg)}
+.create{--accent:var(--create);--tint:var(--create-bg)}
+.results{--accent:var(--results);--tint:var(--results-bg)}
+.new{--accent:var(--new);--tint:var(--new-bg)}
+.sent{--accent:var(--sent);--tint:var(--sent-bg)}
+/* Rate page: four shades of the front-page blue */
+.rb1,.rb2,.rb3,.rb4{--accent:var(--rate)}
+.rb1{--tint:#13243a}
+.rb2{--tint:#112033}
+.rb3{--tint:#0f1c2c}
+.rb4{--tint:#0d1825}
+.bars{display:grid;gap:12px}
+.bar{display:flex;align-items:center;gap:16px;text-align:left;width:100%;border:1px solid var(--line);border-left:6px solid var(--accent);background:var(--tint);border-radius:8px;padding:18px 20px;cursor:pointer}
+.bar:hover{filter:brightness(1.15)}
+.bar:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.bar .t{flex:1;min-width:0;display:grid;gap:4px}
+.bar h2{font-size:21px}
+.bar .arr{font-size:32px;color:var(--accent);line-height:1}
+.flabel{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ftitle{font-size:22px;font-weight:700;width:100%!important}
+.finstr{font:italic 17px/1.5 "Source Serif 4",Georgia,serif;color:var(--fg);background:#0f1215;border:1px solid #3a414c;border-radius:6px;padding:10px 12px;width:100%;resize:vertical}
+.placeholder{border:2px dashed var(--new);border-radius:6px;padding:20px;color:var(--muted);font-style:italic}
+.card{text-align:left;border:1px solid var(--line);border-top:4px solid var(--accent);background:var(--tint);border-radius:8px;padding:16px;display:grid;gap:6px;align-content:start;cursor:pointer;min-width:0}
+.card:hover{filter:brightness(1.15)}
+.card h2{font-size:19px}
+.card .who{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.panel.carry{}
+.carry{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.carry .t{flex:1;min-width:0}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+select,input[type=text]{background:#0f1215;border:1px solid #3a414c;border-radius:6px;padding:8px 10px;min-width:0}
+input[type=text]{width:16rem;max-width:100%}
+.list{display:grid;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.list .item{display:flex;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);background:#0f1215;flex-wrap:wrap}
+.list .item:first-child{border-top:0}
+.list .item .t{flex:1;min-width:0}
+.mono{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.instr{background:#0f1215;border-radius:6px;padding:12px 14px;font:italic 17px/1.5 "Source Serif 4",Georgia,serif}
+details summary{cursor:pointer;color:var(--muted)}
+details ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}
+.steps{display:grid;gap:12px}
+.step{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start}
+.step .n{width:28px;height:28px;border-radius:50%;background:var(--create);display:grid;place-items:center;font-weight:700;font-size:14px}
+.step .b{display:grid;gap:8px;min-width:0}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+th,td{text-align:left;padding:10px 12px;border-top:1px solid var(--line);white-space:nowrap}
+th{border-top:0;font-size:13px;color:var(--muted);font-weight:400;background:#0f1215}
+td{background:#0f1215}
+.opt{display:grid;grid-template-columns:1fr auto;gap:8px 16px;align-items:center}
+.seg{display:inline-flex;border:1px solid #3a414c;border-radius:6px;overflow:hidden}
+.seg button{background:#0f1215;border:0;padding:5px 10px;cursor:pointer;font-size:14px}
+.seg button+button{border-left:1px solid #3a414c}
+.seg button[aria-pressed=true]{background:var(--create);color:#fff}
+.btn.tog{font-size:14px;padding:5px 10px}
+.btn.tog::before{content:"\2610  "}
+.btn.tog[aria-pressed=true]{border-color:var(--create);color:#bff0d4}
+.btn.tog[aria-pressed=true]::before{content:"\2611  "}
+.note{font-size:13px;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.tile{aspect-ratio:1.4;border-radius:6px;background:#1f3a5c;display:grid;place-items:center;font-weight:700;max-width:100%}
+.tile.ref{background:#5c3a1f}
+.sessbar{display:flex;gap:16px;align-items:end;flex-wrap:wrap}
+.sessbar .t{flex:1;min-width:0}
+.sess{display:grid;gap:4px}
+.sess label{font-weight:700}
+.sess input{font-size:18px;border:2px solid var(--rate);width:18rem}
+.board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.board .lockmsg{display:none}
+.board[data-locked=true] .tiles{opacity:.25;filter:grayscale(1);pointer-events:none}
+.board[data-locked=true] .lockmsg{display:grid;place-items:center;position:absolute;inset:0;font-weight:700;font-size:18px;text-align:center;padding:16px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.65);display:grid;place-items:center;padding:16px;z-index:10}
+.dlg{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--results);border-radius:8px;padding:20px;max-width:28rem;display:grid;gap:14px}
+.btn.danger{border-color:#9b2c2c;color:#feb2b2}
+.btn.danger:hover{background:#3b1414}
+.pick[aria-pressed=true]{background:var(--create);border-color:transparent;color:#fff}
+.step.needs{opacity:.35;pointer-events:none}
+.found{background:#0f1215;border:1px solid var(--create);border-radius:6px;padding:10px 14px}
+.found ul{margin:6px 0 0;padding-left:20px}
+.vlist{display:grid;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vi{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);background:#0f1215}
+.vi:first-child{border-top:0}
+.btn.sm{font-size:13px;padding:3px 10px}
+.callout{border:1px dashed #4a5260;border-radius:8px;padding:12px 14px;font-size:14px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.screen{animation:in .15s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+</style>
+
+<div class="mock">Mock-up for discussion. Buttons move between screens; nothing is loaded or saved.</div>
+<header>
+  <span class="logo" data-go="home" role="link" tabindex="0">NeAR <small>Newcastle Audio Ranking</small></span>
+  <span class="sp"></span>
+  <button class="btn" type="button">User manual</button>
+  <button class="btn" type="button">About</button>
+</header>
+
+<main>
+
+<!-- HOME -->
+<section class="screen" id="home">
+  <div class="bars">
+    <button class="bar new" type="button" data-go="newto"><span class="t"><h2>New to NeAR?</h2><span class="muted">See how it works and try an example study.</span></span><span class="arr">&#8250;</span></button>
+    <button class="bar create" type="button" data-go="create"><span class="t"><h2>Create a study</h2><span class="muted">Choose a folder of voices, set the options, and save it as a study.</span></span><span class="arr">&#8250;</span></button>
+    <button class="bar rate" type="button" data-go="rate"><span class="t"><h2>Rate a study</h2><span class="muted">Carry on, open a study you were sent, or try an example.</span></span><span class="arr">&#8250;</span></button>
+    <button class="bar results" type="button" data-go="results"><span class="t"><h2>Results</h2><span class="muted">Download, import or delete results kept in this browser.</span></span><span class="arr">&#8250;</span></button>
+    <p class="callout">Opening NeAR from a study link (…/NeAR/?study=…) skips Home and goes straight to that study.</p>
+  </div>
+</section>
+
+<!-- NEW TO NEAR -->
+<section class="screen" id="newto" hidden>
+  <div style="display:grid;gap:16px">
+    <nav class="nav"><button class="btn big" type="button" data-back>&#8592; Back</button></nav>
+    <h1>New to NeAR?</h1>
+    <div class="panel new">
+      <div class="placeholder">Placeholder for better instructions: what NeAR is for, what a study is, and how a rating session works, perhaps with a short picture of the rating screen.</div>
+      <div class="row">
+        <button class="btn primary" type="button" data-go="study" data-study="ex">Try the example</button>
+        <button class="btn" type="button">Read the user manual</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RATE: choose a study -->
+<section class="screen" id="rate" hidden>
+  <div style="display:grid;gap:16px">
+    <nav class="nav"><button class="btn big" type="button" data-back>&#8592; Back</button></nav>
+    <h1>Which study are you rating?</h1>
+
+    <div class="panel rb1">
+      <h2>Example studies</h2>
+      <div class="row">
+        <label for="exsel" class="muted">Example</label>
+        <select id="exsel"><option>8 voices with 5 references</option><option>Random order, no references</option></select>
+        <button class="btn primary" type="button" data-go="study" data-study="ex">Try it</button>
+      </div>
+    </div>
+    <div class="panel rb2 carry">
+      <div class="t"><strong>Carry on with Dysphonia ranking 2026</strong><br><span class="muted">Last used today at 14:12 · 3 sessions saved</span></div>
+      <button class="btn primary" type="button" data-go="study">Carry on</button>
+    </div>
+    <div class="panel rb3">
+      <h2>Recent studies</h2>
+      <div class="list">
+        <div class="item"><div class="t"><strong>Dysphonia ranking 2026</strong><br><span class="mono">3 sessions · today</span></div><button class="btn" type="button" data-go="study">Open</button></div>
+        <div class="item"><div class="t"><strong>Example files</strong><br><span class="mono">1 session · 30 Sep 2026</span></div><button class="btn" type="button" data-go="study" data-study="ex">Open</button></div>
+      </div>
+    </div>
+    <div class="panel rb4">
+      <h2>A study you were sent</h2>
+      <p class="muted">A study is a .zip file containing the voices and the study's settings.</p>
+      <div class="row"><button class="btn primary" type="button" data-go="study">Open study file…</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- STUDY: the rater's screen -->
+<section class="screen" id="study" hidden>
+  <div style="display:grid;gap:16px">
+    <nav class="nav"><button class="btn big" type="button" data-guard>&#8592; Back</button></nav>
+    <div class="panel rate">
+      <div class="sessbar">
+        <div class="t"><h1 id="stTitle">Dysphonia ranking 2026</h1><p class="muted" id="stMeta">12 voices · 4 references</p></div>
+        <div class="sess">
+          <label for="rater">Session name</label>
+          <input id="rater" type="text" placeholder="Type a name to begin" autocomplete="off">
+        </div>
+      </div>
+      <p class="instr" id="stInstr">Rank the voices by overall severity, least severe at the top left.</p>
+    </div>
+    <div class="board" id="board" data-locked="true">
+      <div class="tiles"><div class="tile ref">R1</div><div class="tile">1</div><div class="tile">2</div><div class="tile">3</div><div class="tile">4</div><div class="tile">5</div><div class="tile">6</div><div class="tile ref">R2</div></div>
+      <div class="lockmsg">Enter your session name above to start rating</div>
+    </div>
+    <div class="row"><button class="btn primary" type="button" id="saveBtn" disabled>Save and finish</button></div>
+    <p class="callout">This is the existing rating screen with a session name box added at the top. The tiles stay greyed out until a name is entered. The study's options are all fixed, so the rater sees none. Back always asks before leaving, with "Keep rating" as the safe default. Closing or reloading the browser tab mid-session also triggers the browser's own "Leave site?" warning.</p>
+  </div>
+</section>
+
+<!-- CREATE -->
+<section class="screen" id="create" hidden>
+  <div style="display:grid;gap:16px">
+    <nav class="nav"><button class="btn big" type="button" data-back>&#8592; Back</button></nav>
+    <h1>Create or edit a study</h1>
+    <div class="panel create steps">
+      <div class="step"><span class="n">1</span><div class="b">
+        <h2>Study folder</h2>
+        <p class="note">Put the voices to rate in a <span class="mono">Test</span> sub-folder and any reference voices in a <span class="mono">Ref</span> sub-folder, then choose the folder that contains them.</p>
+        <div class="row"><button class="btn primary" type="button" style="--accent:var(--create)" id="pickFolder">Choose study folder…</button></div>
+        <div class="found" id="found" hidden>
+          <div class="mono">Dysphonia 2026</div>
+          <ul>
+            <li>12 voices to rate in <span class="mono">Test</span></li>
+            <li>4 reference voices in <span class="mono">Ref</span></li>
+            <li id="foundTxt">No study.txt yet, so NeAR starts from the defaults. Saving creates it.</li>
+          </ul>
+        </div>
+      </div></div>
+      <div class="step needs" data-needs><span class="n">2</span><div class="b">
+        <h2>Options</h2>
+        <p class="note">Every option is fixed for the study; raters can't change them.</p>
+        <div class="opt"><span>Random order</span><span class="row"><span class="seg" data-seg><button type="button" aria-pressed="true">On</button><button type="button" aria-pressed="false">Off</button></span></span></div>
+        <div class="opt"><span>Number labels</span><span class="row"><span class="seg" data-seg><button type="button" aria-pressed="true">On</button><button type="button" aria-pressed="false">Off</button></span></span></div>
+        <div class="opt"><span>Allow samples left unrated</span><span class="row"><span class="seg" data-seg><button type="button" aria-pressed="false">On</button><button type="button" aria-pressed="true">Off</button></span></span></div>
+        <div class="opt"><span>Show play counts</span><span class="row"><span class="seg" data-seg><button type="button" aria-pressed="false">On</button><button type="button" aria-pressed="true">Off</button></span></span></div>
+      </div></div>
+      <div class="step needs" data-needs><span class="n">3</span><div class="b">
+        <h2>Title and instructions</h2>
+        <label class="flabel" for="ctitle">Study title</label>
+        <input id="ctitle" class="ftitle" type="text" value="Dysphonia 2026">
+        <label class="flabel" for="cinstr">Instructions shown to raters</label>
+        <textarea id="cinstr" class="finstr" rows="3">Rank the voices by overall severity, least severe at the top left.</textarea>
+      </div></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" type="button" style="--accent:var(--create)" data-needbtn disabled>Save</button>
+      <button class="btn" type="button" data-needbtn disabled>Save as zip…</button>
+      <button class="btn" type="button" data-go="study" data-needbtn disabled>Try it now</button>
+      <span class="note" id="needNote">Choose a study folder to continue.</span>
+    </div>
+    <p class="callout">Save writes study.txt into the folder in Chrome and Edge, and results go to NeAR.csv in the same folder. Safari and Firefox can't write to folders, so Save downloads study.txt instead. To edit a study later, choose its folder again: its settings are read from study.txt, and saving a change makes it a new study with its own results. A 2012-style folder with WAVs loose at the top (no Test sub-folder) is treated as test voices with no references.</p>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section class="screen" id="results" hidden>
+  <div style="display:grid;gap:16px">
+    <nav class="nav"><button class="btn big" type="button" data-back>&#8592; Back</button></nav>
+    <h1>Results kept in this browser</h1>
+    <p class="placeholder">To be simplified: we'll come back to this page.</p>
+    <p class="muted">In Chrome or Edge with a results folder, results go straight into NeAR.csv, and this page only lists studies opened from a file.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Study</th><th>Sessions</th><th>Last saved</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><strong>Dysphonia ranking 2026</strong> <span class="mono">#3f9a12c0</span></td><td>3</td><td>2 Oct 2026 14:12</td><td><div class="row"><button class="btn" type="button">Download NeAR.csv</button><button class="btn" type="button">Delete…</button></div></td></tr>
+          <tr><td><strong>Example files</strong> <span class="mono">#0ad240dd</span></td><td>1</td><td>30 Sep 2026 10:03</td><td><div class="row"><button class="btn" type="button">Download NeAR.csv</button><button class="btn" type="button">Delete…</button></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="row">
+      <button class="btn" type="button">Import NeAR.csv…</button>
+      <button class="btn" type="button">Recover older results…</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="scrim" id="guard" hidden>
+  <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="gT">
+    <h2 id="gT">Leave this rating session?</h2>
+    <p>Your ranking hasn't been saved. If you leave now, it will be lost.</p>
+    <div class="row">
+      <button class="btn primary" type="button" id="gKeep">Keep rating</button>
+      <button class="btn danger" type="button" id="gLeave">Leave without saving</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const studies={
+  real:{t:"Dysphonia ranking 2026",m:"12 voices · 4 references",i:"Rank the voices by overall severity, least severe at the top left.",s:["Random order: on","Number labels: on","Leave samples unrated: not allowed","References: 4 voices"],free:false},
+  ex:{t:"Example files",m:"8 voices · 5 references",i:"Rank the vowels from least to most rough.",s:["References: 5 voices"],free:true}
+};
+function lock(){const on=!rater.value.trim();board.dataset.locked=on;saveBtn.disabled=on}
+document.addEventListener("input",e=>{if(e.target.id==="rater")lock()});
+const hist=[];let cur="home";
+function show(id,st,back){
+  if(!back&&id!==cur)hist.push(cur);cur=id;
+  document.querySelectorAll(".screen").forEach(s=>s.hidden=s.id!==id);
+  if(id==="study"&&st){
+    const d=studies[st];
+    stTitle.textContent=d.t;stMeta.textContent=d.m;stInstr.textContent=d.i;rater.value="";lock();
+  }
+  window.scrollTo(0,0);
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="pickFolder"){found.hidden=false;document.querySelectorAll("[data-needs]").forEach(x=>x.classList.remove("needs"));document.querySelectorAll("[data-needbtn]").forEach(x=>x.disabled=false);needNote.hidden=true;return}
+  if(e.target.closest("[data-guard]")){guard.hidden=false;gKeep.focus();return}
+  if(e.target.id==="gKeep"){guard.hidden=true;return}
+  if(e.target.id==="gLeave"){guard.hidden=true;show("rate",null,true);return}
+  if(e.target.closest("[data-back]")){show("home",null,true);return}
+  const g=e.target.closest("[data-go]");
+  if(g){show(g.dataset.go,g.dataset.go==="study"?(g.dataset.study||"real"):null);return}
+  const b=e.target.closest("[data-seg] button");
+  if(b){b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches(".logo"))show("home")});
+</script>
