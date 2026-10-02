@@ -26,5 +26,8 @@
     "type": "git",
     "url": "https://github.com/michaeldrinnan/NeAR.git"
   },
-  "homepage": "https://michaeldrinnan.github.io/NeAR/"
+  "homepage": "https://michaeldrinnan.github.io/NeAR/",
+  "dependencies": {
+    "fflate": "^0.8.3"
+  }
 }
