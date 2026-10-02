@@ -1,6 +1,6 @@
 import { registerSW } from 'virtual:pwa-register';
 import './styles.css';
-import { showSetup } from './ui/setup';
+import { startApp } from './ui/app';
 import { showAbout } from './ui/about';
 
 declare global {
@@ -76,4 +76,4 @@ hint.querySelector('.banner-close')!.addEventListener('click', () => {
 });
 
 document.querySelector('#about')!.addEventListener('click', showAbout);
-showSetup(document.querySelector<HTMLElement>('#app')!);
+startApp(document.querySelector<HTMLElement>('#app')!);

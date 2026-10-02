@@ -1,102 +1,92 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { commitStudy, createStudy, discardIfEmpty, listStudies, packageStudy, readStudy, StudyConflictError, writeStudy } from '../src/lib/studies';
-import type { Source } from '../src/lib/sources';
-
-/** A study source whose recordings are the given strings. */
-const source = (label: string, files: Record<string, string>): Source => ({
-  label,
-  items: Object.entries(files).map(([name, body]) => {
-    const file = new File([body], name);
-    return { id: 's:' + name, name, size: file.size, getFile: async () => file };
-  }),
-});
+import { commitStudy, deleteStudy, listStudies, readStudyLines, StudyConflictError, studyId, writeStudy } from '../src/lib/studies';
+import { resultsFor } from '../src/lib/results';
+import type { OpenStudy } from '../src/lib/sources';
+import { defaultDefinition } from '../src/lib/studyFormat';
 
 const H = 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,a.wav';
+const row = (who: string) => `${who},2026-10-02,10:00:00,S #01234567,,0,1`;
+let n = 0;
+const fresh = () => `study-${++n}`;
+const create = { name: 'S', format: 'identity' };
 
-describe('browser studies in IndexedDB', () => {
-  const row = (who: string) => `${who},2026-10-02,10:00:00,S,,0,1`;
-
-  it('never deletes a session saved by another tab while an empty study is being cleaned up', async () => {
-    for (let i = 0; i < 20; i++) {
-      const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Racing ' + i);
-      // One tab abandons the fresh study while another saves the first session to it.
-      const save = () => commitStudy(study.id, [H, row('Rater')], null);
-      const [saved, discarded] = await Promise.allSettled([i % 2 ? save() : Promise.resolve().then(save), discardIfEmpty(study.id)]);
-      const left = (await listStudies()).find((s) => s.id === study.id);
-      if (saved.status === 'fulfilled') {
-        // The save committed, so the study and its session must still be there.
-        expect(left?.lines).toEqual([H, row('Rater')]);
-        expect(discarded).toEqual({ status: 'fulfilled', value: false });
-      } else {
-        // The clean-up won: the save was refused (and reported), nothing half-written.
-        expect(discarded).toEqual({ status: 'fulfilled', value: true });
-        expect(left).toBeUndefined();
-      }
-    }
+describe('browser-kept results', () => {
+  it('are only stored once a session is saved, so a study that is just looked at leaves nothing behind', async () => {
+    const id = fresh();
+    expect(await readStudyLines(id)).toBeNull();
+    expect((await listStudies()).find((s) => s.id === id)).toBeUndefined();
+    await commitStudy(id, [H, row('First')], null, create);
+    expect(await readStudyLines(id)).toEqual([H, row('First')]);
   });
 
-  it('only discards studies that are still empty', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Has results');
-    await commitStudy(study.id, [H, row('Anne')], null);
-    expect(await discardIfEmpty(study.id)).toBe(false);
-    expect((await readStudy(study.id)).lines).toHaveLength(2);
-  });
-
-  it('saves a session when the results are unchanged since it started, and returns what was saved', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Plain save');
-    await writeStudy(study.id, [H, row('First')]);
-    const saved = await commitStudy(study.id, [H, row('First'), row('Second')], [H, row('First')]);
+  it('save a session when the results are unchanged since it started, and return what was saved', async () => {
+    const id = fresh();
+    await commitStudy(id, [H, row('First')], null, create);
+    const saved = await commitStudy(id, [H, row('First'), row('Second')], [H, row('First')], create);
     expect(saved).toEqual([H, row('First'), row('Second')]);
-    expect((await readStudy(study.id)).lines).toEqual(saved);
+    expect(await readStudyLines(id)).toEqual(saved);
   });
 
-  it('refuses, rather than merging or overwriting, when another tab saved a session meanwhile', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Two tabs');
-    await writeStudy(study.id, [H]);
-    // Both tabs read [H] when their sessions started; the first to finish wins, the second is refused.
+  it('refuse, rather than merging or overwriting, when another tab saved a session meanwhile (even the first)', async () => {
+    const id = fresh();
+    // Both tabs read nothing when their sessions started; the first to finish wins, the second is refused.
     const results = await Promise.allSettled([
-      commitStudy(study.id, [H, row('TabA')], [H]),
-      commitStudy(study.id, [H, row('TabB')], [H]),
+      commitStudy(id, [H, row('TabA')], null, create),
+      commitStudy(id, [H, row('TabB')], null, create),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const refused = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
     expect(refused.reason).toBeInstanceOf(StudyConflictError);
-    const lines = (await readStudy(study.id)).lines!;
-    expect(lines).toHaveLength(2); // exactly the winner's session, nothing merged
+    expect(await readStudyLines(id)).toHaveLength(2); // exactly the winner's session, nothing merged
   });
 
-  it('never overwrites an import made while a session was running (even with different columns)', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Import race');
-    await writeStudy(study.id, [H, row('Before')]);
+  it('never overwrite an import made while a session was running (even with different columns)', async () => {
+    const id = fresh();
+    await commitStudy(id, [H, row('Before')], null, create);
     const imported = ['RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,other.wav', 'Imported,2020-01-01,09:00:00,S,,0,1'];
-    await writeStudy(study.id, imported); // another tab imports during this session
-    await expect(commitStudy(study.id, [H, row('Before'), row('Session')], [H, row('Before')])).rejects.toBeInstanceOf(StudyConflictError);
-    expect((await readStudy(study.id)).lines).toEqual(imported);
+    await writeStudy(id, imported); // another tab imports during this session
+    await expect(commitStudy(id, [H, row('Before'), row('Session')], [H, row('Before')], create)).rejects.toBeInstanceOf(StudyConflictError);
+    expect(await readStudyLines(id)).toEqual(imported);
   });
 
-  it('allows a deliberate reset to a fresh file when nothing changed meanwhile', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Reset');
+  it('allow a deliberate reset to a fresh file when nothing changed meanwhile', async () => {
+    const id = fresh();
     const old = ['RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,old.wav', 'Old,2020-01-01,09:00:00,S,,0,1'];
-    await writeStudy(study.id, old);
-    await commitStudy(study.id, [H, row('New')], old);
-    expect((await readStudy(study.id)).lines).toEqual([H, row('New')]);
+    await commitStudy(id, old, null, create);
+    await commitStudy(id, [H, row('New')], old, create);
+    expect(await readStudyLines(id)).toEqual([H, row('New')]);
   });
 
-  it('reports a save to a study deleted in another tab instead of losing it silently', async () => {
-    const study = await createStudy(source('S', { 'a.wav': 'A' }), 'Gone');
-    expect(await discardIfEmpty(study.id)).toBe(true);
-    await expect(commitStudy(study.id, [H, row('Late')], null)).rejects.toThrow(/could not be found/);
+  it('report a save to results deleted in another tab instead of losing it silently or starting again', async () => {
+    const id = fresh();
+    await commitStudy(id, [H, row('First')], null, create);
+    await deleteStudy(id);
+    await expect(commitStudy(id, [H, row('First'), row('Late')], [H, row('First')], create)).rejects.toBeInstanceOf(StudyConflictError);
+    expect(await readStudyLines(id)).toBeNull();
   });
 
-  it('keeps a study package’s results under its identity, never in a look-alike ordinary study', async () => {
-    const examples = source('Example files', { 'sample-A.wav': 'xyz', 'sample-B.wav': 'pqr' });
-    const users = await createStudy(examples, 'Example files v1'); // an ordinary study that looks just like it
-    const pkg = await packageStudy(examples, 'identity-1', 'Example files v1');
-    expect(pkg.id).not.toBe(users.id);
-    expect(pkg.format).toBe('identity-1');
-    // Loading the same package again finds the same study; a changed package (new identity) gets its own.
-    expect((await packageStudy(examples, 'identity-1', 'Example files v1')).id).toBe(pkg.id);
-    expect((await packageStudy(examples, 'identity-2', 'Example files v2')).id).not.toBe(pkg.id);
+  it('are kept per study identity: the same study carries on, a changed one starts afresh', async () => {
+    const study = (identity: string): OpenStudy => ({
+      definition: defaultDefinition('Voices'),
+      warnings: [],
+      samples: [new File(['A'], 'a.wav')],
+      references: [],
+      identity,
+      hasDefinition: true,
+      results: [],
+      origin: { kind: 'zip', name: 'Voices.zip', bytes: new Uint8Array() },
+      folderName: 'Voices.zip',
+    });
+    const first = resultsFor(study('aaaaaaaa1111'));
+    expect(first.inBrowser).toBe(true);
+    expect(first.fileName).toBe('NeAR_Voices_aaaaaaaa.csv');
+    expect(await first.read()).toBeNull();
+    await first.commit([H, row('One')]);
+    const again = resultsFor(study('aaaaaaaa1111'));
+    expect(await again.read()).toEqual([H, row('One')]);
+    expect(await resultsFor(study('bbbbbbbb2222')).read()).toBeNull();
+    const kept = (await listStudies()).find((s) => s.id === studyId('aaaaaaaa1111'));
+    expect(kept).toMatchObject({ name: 'Voices', format: 'aaaaaaaa1111' });
   });
 });

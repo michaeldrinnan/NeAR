@@ -4,12 +4,14 @@ export interface DialogButton<T extends string> {
   label: string;
   value: T;
   primary?: boolean;
+  /** Shown in red: a choice that loses work. */
+  danger?: boolean;
 }
 
 const TITLE = 'Newcastle Audio Ranking test';
 
-/** Shows a modal; Escape picks the last button (Cancel / No / OK). */
-export function ask<T extends string>(body: string | Node, buttons: DialogButton<T>[], title = TITLE): Promise<T> {
+/** Shows a modal; Escape picks `escape`, or else the last button (Cancel / No / OK). */
+export function ask<T extends string>(body: string | Node, buttons: DialogButton<T>[], title = TITLE, escape?: T): Promise<T> {
   const dialog = document.createElement('dialog');
   dialog.className = 'modal';
   const heading = document.createElement('h2');
@@ -32,13 +34,13 @@ export function ask<T extends string>(body: string | Node, buttons: DialogButton
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = b.label;
-      if (b.primary) btn.className = 'primary';
+      btn.className = [b.primary && 'primary', b.danger && 'danger'].filter(Boolean).join(' ');
       btn.addEventListener('click', () => finish(b.value));
       row.append(btn);
     }
     dialog.addEventListener('cancel', (e) => {
       e.preventDefault();
-      finish(buttons[buttons.length - 1].value);
+      finish(escape ?? buttons[buttons.length - 1].value);
     });
     document.body.append(dialog);
     dialog.showModal();

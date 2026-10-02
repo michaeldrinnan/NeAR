@@ -1,61 +1,85 @@
 import { enableDrag } from './drag';
 import type { AudioItem } from '../lib/sources';
+import type { StudyOptions } from '../lib/studyFormat';
 import { shuffle, stem } from '../lib/order';
 import { makeTileImages } from '../lib/tileArt';
 import { alertBox, yesNo } from './dialog';
 
-export interface RatingOptions {
-  random: boolean;
-  numbers: boolean;
-  names: boolean;
-  showCount: boolean;
-  canLeave: boolean;
-  animate: boolean;
-  /** Instructions from a loaded study, shown above the boxes. */
-  instructions?: readonly string[];
+const ANIMATE_KEY = 'near.animate';
+
+/** Animating the tiles is each rater's own preference, kept in this browser. */
+export function animatePreference(): boolean {
+  try {
+    const stored = localStorage.getItem(ANIMATE_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  return !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function setAnimatePreference(on: boolean) {
+  try {
+    localStorage.setItem(ANIMATE_KEY, on ? '1' : '0');
+  } catch {
+    /* a convenience only */
+  }
+}
+
+export interface RatingSession {
+  /** Resolves with the final contents of the rated box, best first, references included, once the rater finishes. */
+  done: Promise<string[]>;
+  /** Locks the board (no playing, dragging or finishing), e.g. until a session name is entered. */
+  setLocked(locked: boolean, message?: string): void;
+  /** Ends the session without saving (Back). */
+  stop(): void;
 }
 
 /**
- * Runs one rating session (the old RaterInterface window). Resolves with the
- * final contents of the rated box, best first, references included.
+ * Runs one rating session (the old RaterInterface window) in `root`. `beforeFinish`
+ * is asked first when the rater presses Save and finish; returning false carries on rating.
  */
 export function runRating(
   root: HTMLElement,
   samples: readonly AudioItem[],
   refs: readonly AudioItem[] | null,
-  opts: RatingOptions,
-): Promise<string[]> {
+  opts: StudyOptions,
+  beforeFinish: () => Promise<boolean> = async () => true,
+): RatingSession {
   root.innerHTML = `
     <section class="rating">
       <p class="hint">In the top box you should arrange the rated samples. Click <b>Play</b> to listen,
         then drag them around until you are happy with the order.
         ${refs ? 'The plain blue samples are references; their order cannot be changed.' : ''}</p>
-      <div class="study-instructions" hidden></div>
-      <p class="best">Put the BEST sample here at top left.</p>
-      <div class="box rated" aria-label="Rated samples"></div>
-      <p class="hint">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
-      <div class="box unrated" aria-label="Unrated samples"></div>
+      <div class="board" data-locked="true">
+        <p class="best">Put the BEST sample here at top left.</p>
+        <div class="box rated" aria-label="Rated samples"></div>
+        <p class="hint">In the box below are the unrated samples. You can also use this area to hold samples you are not sure about.</p>
+        <div class="box unrated" aria-label="Unrated samples"></div>
+        <div class="lockmsg"><span></span></div>
+      </div>
       <div class="rating-bar">
         <span class="count" aria-live="polite"></span>
-        <button type="button" class="finish">Finished rating</button>
+        <button type="button" class="primary finish">Save and finish</button>
       </div>
       <div class="player">
         <span class="now-playing">Use the player to pause, seek or change the volume.</span>
         <audio controls preload="auto"></audio>
       </div>
+      <label class="check animate-pref"><input type="checkbox" name="animate">
+        <span>Animate the samples as they are moved. Untick if movement on screen is uncomfortable.</span></label>
     </section>`;
 
-  if (opts.instructions?.length) {
-    const box = root.querySelector<HTMLElement>('.study-instructions')!;
-    for (const line of opts.instructions) box.append(Object.assign(document.createElement('p'), { textContent: line }));
-    box.hidden = false;
-  }
+  const board = root.querySelector<HTMLElement>('.board')!;
   const ratedBox = root.querySelector<HTMLElement>('.rated')!;
   const unratedBox = root.querySelector<HTMLElement>('.unrated')!;
   const countLabel = root.querySelector<HTMLElement>('.count')!;
   const finishBtn = root.querySelector<HTMLButtonElement>('.finish')!;
   const audio = root.querySelector('audio')!;
   const nowPlaying = root.querySelector<HTMLElement>('.now-playing')!;
+  const animateBox = root.querySelector<HTMLInputElement>('input[name="animate"]')!;
+  animateBox.checked = animatePreference();
+  animateBox.addEventListener('change', () => setAnimatePreference(animateBox.checked));
 
   const urls = new Map<string, string>();
   const playing = { id: '' };
@@ -134,12 +158,36 @@ export function runRating(
   };
   updateCount();
 
-  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, opts.animate);
+  const disableDrag = enableDrag([ratedBox, unratedBox], updateCount, () => animateBox.checked);
 
   const warnOnLeave = (e: BeforeUnloadEvent) => e.preventDefault();
   window.addEventListener('beforeunload', warnOnLeave);
 
-  return new Promise<string[]>((resolve) => {
+  let ended = false;
+  function end() {
+    if (ended) return;
+    ended = true;
+    playRequest++;
+    audio.pause();
+    window.removeEventListener('beforeunload', warnOnLeave);
+    disableDrag();
+    audio.removeAttribute('src');
+    urls.forEach((u) => URL.revokeObjectURL(u));
+  }
+
+  function setLocked(locked: boolean, message = 'Enter a session name above to start rating') {
+    board.dataset.locked = String(locked);
+    board.inert = locked;
+    board.querySelector('.lockmsg span')!.textContent = message;
+    finishBtn.disabled = locked;
+    if (locked) {
+      playRequest++;
+      audio.pause();
+    }
+  }
+  setLocked(true);
+
+  const done = new Promise<string[]>((resolve) => {
     finishBtn.addEventListener('click', async (e) => {
       // Ctrl-click lets the supervisor end early even when all samples must be rated.
       const override = e.ctrlKey || e.metaKey;
@@ -149,6 +197,7 @@ export function runRating(
         await alertBox("Sorry, you haven't finished yet.\nAll the samples must be rated.");
         return;
       }
+      if (!(await beforeFinish())) return;
       const question =
         left > 0
           ? "You haven't rated all the samples - are you SURE you've finished?\n\n"
@@ -158,14 +207,13 @@ export function runRating(
           'If you choose YES, the rating session will be finished and no further changes are possible.\n' +
           'Choose NO to go back to where you were.',
       );
-      if (key === 'no') return;
+      if (key === 'no' || ended) return;
 
       const result = [...ratedBox.querySelectorAll<HTMLElement>('.tile')].map((t) => t.dataset.id!);
-      window.removeEventListener('beforeunload', warnOnLeave);
-      disableDrag();
-      audio.removeAttribute('src');
-      urls.forEach((u) => URL.revokeObjectURL(u));
+      end();
       resolve(result);
     });
   });
+
+  return { done, setLocked, stop: end };
 }

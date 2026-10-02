@@ -27,7 +27,7 @@ function layoutRect(el: HTMLElement): DOMRect {
 
 const inside = (r: DOMRect, x: number, y: number) => x >= r.left && x < r.right && y >= r.top && y < r.bottom;
 
-export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, animate = true): () => void {
+export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, animated: () => boolean = () => true): () => void {
   let dragged: HTMLElement | null = null;
   let avatar: HTMLElement | null = null;
   let settling: Animation | null = null;
@@ -45,7 +45,7 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, 
 
   /** Runs a DOM rearrangement and slides every tile from its old place to its new one. */
   function flip(mutate: () => void) {
-    if (!animate) return mutate();
+    if (!animated()) return mutate();
     const all = tiles();
     const before = new Map(all.map((t) => [t, t.getBoundingClientRect()])); // where they are seen now
     mutate();
@@ -169,7 +169,7 @@ export function enableDrag(boxes: readonly HTMLElement[], onChange: () => void, 
     onChange();
 
     // Let the floating copy settle into the tile's slot before revealing the tile.
-    if (!a || !animate) {
+    if (!a || !animated()) {
       a?.remove();
       d.classList.remove('moving');
       return;

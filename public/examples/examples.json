@@ -1,19 +1,19 @@
 {
   "samples": [
-    "TestItems/sample-A.wav",
-    "TestItems/sample-B.wav",
-    "TestItems/sample-C.wav",
-    "TestItems/sample-D.wav",
-    "TestItems/sample-E.wav",
-    "TestItems/sample-F.wav",
-    "TestItems/sample-G.wav",
-    "TestItems/sample-H.wav"
+    "Test/sample-A.wav",
+    "Test/sample-B.wav",
+    "Test/sample-C.wav",
+    "Test/sample-D.wav",
+    "Test/sample-E.wav",
+    "Test/sample-F.wav",
+    "Test/sample-G.wav",
+    "Test/sample-H.wav"
   ],
   "references": [
-    "RefItems/ref-1.wav",
-    "RefItems/ref-2.wav",
-    "RefItems/ref-3.wav",
-    "RefItems/ref-4.wav",
-    "RefItems/ref-5.wav"
+    "Ref/ref-1.wav",
+    "Ref/ref-2.wav",
+    "Ref/ref-3.wav",
+    "Ref/ref-4.wav",
+    "Ref/ref-5.wav"
   ]
 }

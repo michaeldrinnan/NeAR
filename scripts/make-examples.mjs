@@ -147,29 +147,26 @@ const sampleLevels = [0.04, 0.16, 0.28, 0.4, 0.52, 0.64, 0.76, 0.9];
 const letters = ['E', 'B', 'G', 'A', 'H', 'D', 'F', 'C']; // letters[i] gets sampleLevels[i]
 const refLevels = [0, 0.25, 0.5, 0.75, 1];
 
-mkdirSync(new URL('TestItems/', OUT), { recursive: true });
-mkdirSync(new URL('RefItems/', OUT), { recursive: true });
+mkdirSync(new URL('Test/', OUT), { recursive: true });
+mkdirSync(new URL('Ref/', OUT), { recursive: true });
 
 const files = [];
-sampleLevels.forEach((h, i) => files.push([`TestItems/sample-${letters[i]}.wav`, wav(vowel(h, 1000 + i))]));
-refLevels.forEach((h, i) => files.push([`RefItems/ref-${i + 1}.wav`, wav(vowel(h, 2000 + i))]));
+sampleLevels.forEach((h, i) => files.push([`Test/sample-${letters[i]}.wav`, wav(vowel(h, 1000 + i))]));
+refLevels.forEach((h, i) => files.push([`Ref/ref-${i + 1}.wav`, wav(vowel(h, 2000 + i))]));
 
 const CRLF = String.fromCharCode(13, 10);
 
-// The examples are NeAR study packages (docs/study-format.md): study.txt plus the folders.
+// The examples are NeAR studies (docs/study-format.md): study.txt plus the Test and Ref folders.
 const study = [
   '# NeAR study definition: the example files bundled with NeAR.',
-  '# Options left blank can be changed by the rater.',
   'title         = Example files',
-  'version       = 1',
   'instructions  = Synthetic sustained "ah" vowels with varying hoarseness.',
   'instructions  = Rank them from the clearest voice (top left) to the roughest.',
-  'random        =',
-  'numbers       =',
-  'names         =',
-  'play_count    =',
-  'leave_unrated =',
-  'animate       =',
+  'random        = on',
+  'numbers       = on',
+  'names         = off',
+  'play_count    = off',
+  'leave_unrated = off',
   '',
 ].join(CRLF);
 
@@ -178,8 +175,8 @@ writeFileSync(new URL('study.txt', OUT), study);
 writeFileSync(
   new URL('examples.json', OUT),
   JSON.stringify({
-    samples: files.filter(([n]) => n.startsWith('TestItems/')).map(([n]) => n).sort(),
-    references: files.filter(([n]) => n.startsWith('RefItems/')).map(([n]) => n).sort(),
+    samples: files.filter(([n]) => n.startsWith('Test/')).map(([n]) => n).sort(),
+    references: files.filter(([n]) => n.startsWith('Ref/')).map(([n]) => n).sort(),
   }, null, 2) + '\n',
 );
 
@@ -189,25 +186,22 @@ const STUDIES = new URL('../public/studies/', import.meta.url);
 mkdirSync(STUDIES, { recursive: true });
 writeFileSync(new URL('example-files.zip', STUDIES), zip([['study.txt', Buffer.from(study)], ...files]));
 
-// A second example: the same voices with no references, in a random order for each rater,
-// labelled by number — showing settings a study fixes.
-const randomStudy = [
-  '# NeAR study definition: the example voices without references, in random order.',
-  '# random and numbers are fixed by this study; blank options can be changed by the rater.',
-  'title         = Example: random order, no references',
-  'version       = 1',
-  'instructions  = The same eight voices, in a different random order for each rater and labelled by number.',
-  'instructions  = Rank them from the clearest voice (top left) to the roughest.',
-  'random        = yes',
-  'numbers       = yes',
-  'names         = no',
-  'play_count    =',
-  'leave_unrated = no',
-  'animate       =',
+// A second example: the same voices with no references, unnumbered, with play counts shown
+// and samples allowed to stay unrated - showing other settings a study can fix.
+const otherStudy = [
+  '# NeAR study definition: the example voices without references.',
+  'title         = Example: no references',
+  'instructions  = The same eight voices, with no references, in a different random order for each rater.',
+  'instructions  = Rank them from the clearest voice (top left) to the roughest. You may leave out any you are unsure about.',
+  'random        = on',
+  'numbers       = off',
+  'names         = off',
+  'play_count    = on',
+  'leave_unrated = on',
   '',
 ].join(CRLF);
 writeFileSync(
-  new URL('example-random.zip', STUDIES),
-  zip([['study.txt', Buffer.from(randomStudy)], ...files.filter(([n]) => n.startsWith('TestItems/'))]),
+  new URL('example-no-references.zip', STUDIES),
+  zip([['study.txt', Buffer.from(otherStudy)], ...files.filter(([n]) => n.startsWith('Test/'))]),
 );
 console.log('Example voices written to public/examples/, example studies to public/studies/.');

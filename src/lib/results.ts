@@ -1,92 +1,113 @@
 import { CSV_FILE, parseLines, serializeLines } from './csv';
-import { commitStudy, readStudy, writeStudy } from './studies';
-import type { Source } from './sources';
+import { commitStudy, readStudyLines, studyId, writeStudy } from './studies';
+import { studyFileName } from './studyFormat';
+import type { OpenStudy } from './sources';
 
-/** Where NeAR.csv lives: in the samples folder, or (without folder access) in this browser. */
+/**
+ * Where a study's results file NeAR_<title>_<code>.csv lives: in the study folder
+ * (Chrome/Edge), or otherwise in this browser.
+ */
 export interface ResultsStore {
-  /** Human-readable location, e.g. 'NeAR.csv in folder "Voices"'. */
+  fileName: string;
+  /** Human-readable location, e.g. 'NeAR_Voices_1a2b3c4d.csv in folder “Voices”'. */
   where: string;
   inBrowser: boolean;
   /** The file's lines, or null if there is no results file yet. */
   read(): Promise<string[] | null>;
-  write(lines: readonly string[]): Promise<void>;
-  /** Browser-kept results only: what is stored for this study, ignoring any NeAR.csv found with the files. */
-  readStored?(): Promise<string[] | null>;
   /**
-   * Browser-kept results only: saves a finished session, but only if the stored results are still
-   * what the last read() saw. Resolves with the lines committed.
+   * Saves a finished session. Browser-kept results are saved only if they are still
+   * what the last read() saw. Resolves with the lines saved.
    */
-  commit?(lines: readonly string[]): Promise<string[]>;
+  commit(lines: readonly string[]): Promise<string[]>;
 }
 
-export function resultsFor(source: Source): ResultsStore {
-  return source.dir ? folderResults(source.dir) : browserResults(source);
+export const resultsFileName = (study: Pick<OpenStudy, 'definition' | 'identity'>) =>
+  studyFileName(study.definition.title, study.identity, 'csv');
+
+export function resultsFor(study: OpenStudy): ResultsStore {
+  return study.origin.kind === 'folder' ? folderResults(study.origin.dir, resultsFileName(study)) : browserResults(study);
 }
 
-function folderResults(dir: FileSystemDirectoryHandle): ResultsStore {
+async function readFolderFile(dir: FileSystemDirectoryHandle, name: string): Promise<string[] | null> {
+  let handle: FileSystemFileHandle;
+  try {
+    handle = await dir.getFileHandle(name);
+  } catch (e) {
+    if ((e as DOMException).name === 'NotFoundError' || (e as DOMException).name === 'TypeMismatchError') return null;
+    throw e;
+  }
+  return parseLines(await (await handle.getFile()).text());
+}
+
+function folderResults(dir: FileSystemDirectoryHandle, fileName: string): ResultsStore {
   return {
-    where: `${CSV_FILE} in folder “${dir.name}”`,
+    fileName,
+    where: `${fileName} in folder “${dir.name}”`,
     inBrowser: false,
-    async read() {
-      let handle: FileSystemFileHandle;
-      try {
-        handle = await dir.getFileHandle(CSV_FILE);
-      } catch (e) {
-        if ((e as DOMException).name === 'NotFoundError') return null;
-        throw e;
-      }
-      return parseLines(await (await handle.getFile()).text());
-    },
-    async write(lines) {
-      const handle = await dir.getFileHandle(CSV_FILE, { create: true });
+    read: () => readFolderFile(dir, fileName),
+    async commit(lines) {
+      const handle = await dir.getFileHandle(fileName, { create: true });
       const out = await handle.createWritable();
       await out.write(serializeLines(lines));
       await out.close();
+      return [...lines];
     },
   };
 }
 
-function browserResults(source: Source): ResultsStore {
-  const id = source.studyId;
-  if (!id) throw new Error('Choose a browser study first.');
-  const seed = source.csv;
-  const readStored = async () => (await readStudy(id)).lines;
+function browserResults(study: OpenStudy): ResultsStore {
+  const id = studyId(study.identity);
   // What the stored results were when this session read them, for commit() to check against.
   let seen: string[] | null | undefined;
   return {
-    where: `this browser (results for “${source.label}”)`,
+    fileName: resultsFileName(study),
+    where: 'this browser',
     inBrowser: true,
-    readStored,
     async read() {
-      const stored = await readStored();
+      const stored = await readStudyLines(id);
       seen = stored ? [...stored] : null; // a copy: the caller appends its new row to the array it gets back
-      if (stored) return stored;
-      return seed ? parseLines(await seed.text()) : null;
-    },
-    async write(lines) {
-      await writeStudy(id, lines);
+      return stored;
     },
     async commit(lines) {
       if (seen === undefined) throw new Error('The results were not read before saving.');
-      const committed = await commitStudy(id, lines, seen);
+      const committed = await commitStudy(id, lines, seen, { name: study.definition.title, format: study.identity });
       seen = committed;
       return committed;
     },
   };
 }
 
-/** Replaces the browser-kept results for a study, e.g. from an imported NeAR.csv. */
-export async function importBrowserResults(source: Source, file: File): Promise<void> {
-  await resultsFor(source).write(parseLines(await file.text()));
+/** A plain NeAR.csv from the 2012 version (or an earlier web version) beside the study, if there is one. */
+export async function legacyResultsFile(study: OpenStudy): Promise<string[] | null> {
+  if (study.origin.kind === 'folder') return readFolderFile(study.origin.dir, CSV_FILE);
+  const file = study.results.find((f) => f.name.toLowerCase() === CSV_FILE.toLowerCase());
+  return file ? parseLines(await file.text()) : null;
 }
 
-export function downloadLines(lines: readonly string[], fileName: string): void {
-  const url = URL.createObjectURL(new Blob([serializeLines(lines)], { type: 'text/csv' }));
+/** A copy of this study's results file found among a folder's files (browsers without folder access). */
+export async function folderCopy(study: OpenStudy): Promise<string[] | null> {
+  if (study.origin.kind !== 'files') return null;
+  const name = resultsFileName(study).toLowerCase();
+  const file = study.results.find((f) => f.name.toLowerCase() === name);
+  return file ? parseLines(await file.text()) : null;
+}
+
+/** Replaces the browser-kept results for a study (Results page imports). */
+export async function importResults(id: string, file: File): Promise<void> {
+  await writeStudy(id, parseLines(await file.text()));
+}
+
+export function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement('a'), { href: url, download: fileName });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export function downloadLines(lines: readonly string[], fileName: string): void {
+  downloadBlob(new Blob([serializeLines(lines)], { type: 'text/csv' }), fileName);
 }
 
 /**
