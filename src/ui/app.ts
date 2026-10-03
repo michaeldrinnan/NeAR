@@ -2,7 +2,7 @@ import { summarize } from '../lib/csv';
 import { forgetRecent, listRecent, reopenRecent, type RecentStudy } from '../lib/recent';
 import { notDownloaded, readStudyLines, readStudyRecord, studyId } from '../lib/studies';
 import { downloadStudyResults } from '../lib/results';
-import { canUseFolders, filesEntries, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
+import { canUseFolders, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
 import { studyCode, studyFileName } from '../lib/studyFormat';
 import { showCreate } from './create';
 import { alertBox, ask } from './dialog';
@@ -193,6 +193,9 @@ async function showRate(back: () => void) {
   });
   const folderInput = el('input', { type: 'file', hidden: true, multiple: true });
   folderInput.webkitdirectory = true;
+  // Choosing a folder always says what is happening: opening it, or why nothing was opened.
+  const folderNote = el('p', { className: 'note pick-note', 'aria-live': 'polite' });
+  const opening = (name: string) => `Opening “${name}” and checking that every audio file plays…`;
   const openFolder = el('button', { type: 'button', textContent: 'Open study folder…' });
   openFolder.addEventListener('click', async () => {
     if (!canUseFolders) {
@@ -201,16 +204,27 @@ async function showRate(back: () => void) {
       return;
     }
     let dir: FileSystemDirectoryHandle | null;
+    folderNote.textContent = '';
     try {
       dir = await pickStudyFolder();
     } catch (e) {
       return void alertBox(`Couldn't open that folder.\n\n${(e as Error).message}`);
     }
-    if (dir) void open(() => studyFromFolder(dir), `Couldn't open “${dir.name}” as a study.`, rateBack);
+    if (!dir) {
+      folderNote.textContent = NO_FOLDER_NOTE;
+      return;
+    }
+    folderNote.textContent = opening(dir.name);
+    await open(() => studyFromFolder(dir), `Couldn't open “${dir.name}” as a study.`, rateBack);
+    folderNote.textContent = '';
   });
-  folderInput.addEventListener('change', () => {
+  folderInput.addEventListener('change', async () => {
     const files = folderInput.files;
-    if (files?.length) void open(() => studyFromFiles(files), `Couldn't open “${filesEntries(files).name}” as a study.`, rateBack);
+    if (!files?.length) return;
+    const { name } = filesEntries(files);
+    folderNote.textContent = opening(name);
+    await open(() => studyFromFiles(files), `Couldn't open “${name}” as a study.`, rateBack);
+    folderNote.textContent = '';
   });
 
   const panels: HTMLElement[] = [
@@ -263,6 +277,7 @@ async function showRate(back: () => void) {
         [el('h2', { textContent: 'A study you were sent' }), el('p', { className: 'muted', textContent: 'A study is a .zip file, or a folder, containing the voices and the study’s settings.' })],
         [openZip, openFolder],
       ),
+      folderNote,
       zipInput,
       folderInput,
     ]),

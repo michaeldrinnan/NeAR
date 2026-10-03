@@ -241,8 +241,11 @@ export async function playable(file: File): Promise<boolean> {
   const Offline = (globalThis as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
   if (!Offline) return true;
   try {
-    await new Offline(1, 1, 8000).decodeAudioData(await file.arrayBuffer());
-    return true;
+    const bytes = await file.arrayBuffer();
+    const decoded = new Offline(1, 1, 8000).decodeAudioData(bytes).then(() => true);
+    // A decode that never settles mustn't hang the page: after 15 s, rely on the header check above.
+    const waited = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 15_000));
+    return await Promise.race([decoded, waited]);
   } catch {
     return false;
   }

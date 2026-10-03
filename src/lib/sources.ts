@@ -85,7 +85,12 @@ export async function studyFromFiles(files: Iterable<File>): Promise<OpenStudy> 
   return { ...(await readStudy(entries, name)), origin: { kind: 'files', name }, folderName: name };
 }
 
-/** Asks for a study folder NeAR may write to; null if the user cancels. */
+/** Shown when the folder picker comes back with no folder, so choosing one is never met with silence. */
+export const NO_FOLDER_NOTE =
+  'No folder was opened. If you chose one and nothing happened, the browser may have asked whether NeAR can view and ' +
+  'edit its files: NeAR needs that to save results into the folder, so choose Allow (or Edit files) when asked.';
+
+/** Asks for a study folder NeAR may write to; null if the user cancels (or the browser refuses). */
 /**
  * Writes study.txt into a folder study that has none, with the settings it was rated with, so
  * the folder keeps its title and options even if it is renamed. The study code is unchanged.

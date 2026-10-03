@@ -1,6 +1,6 @@
 import { parseLines, summarize } from '../lib/csv';
 import { downloadBlob } from '../lib/results';
-import { canUseFolders, filesEntries, folderEntries, pickStudyFolder, type OpenStudy } from '../lib/sources';
+import { canUseFolders, filesEntries, folderEntries, NO_FOLDER_NOTE, pickStudyFolder, type OpenStudy } from '../lib/sources';
 import {
   baseName,
   defaultDefinition,
@@ -66,6 +66,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
   const pick = el('button', { type: 'button', className: 'primary', textContent: 'Choose study folder…' });
   const filesInput = el('input', { type: 'file', hidden: true, multiple: true });
   filesInput.webkitdirectory = true;
+  const pickNote = el('p', { className: 'note pick-note', 'aria-live': 'polite' });
   pick.addEventListener('click', async () => {
     if (!canUseFolders) {
       filesInput.value = '';
@@ -74,9 +75,14 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     }
     let dir: FileSystemDirectoryHandle | null;
     try {
+      pickNote.textContent = '';
       dir = await pickStudyFolder();
-      if (!dir) return;
+      if (!dir) {
+        pickNote.textContent = NO_FOLDER_NOTE;
+        return;
+      }
       pick.disabled = true;
+      pickNote.textContent = reading(dir.name);
       await choose(dir.name, await folderEntries(dir), dir);
     } catch (e) {
       await alertBox(`Couldn't open that folder.\n\n${(e as Error).message}`);
@@ -87,6 +93,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     if (!filesInput.files?.length) return;
     const { name, entries } = filesEntries(filesInput.files);
     pick.disabled = true;
+    pickNote.textContent = reading(name);
     try {
       await choose(name, entries);
     } catch (e) {
@@ -110,6 +117,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       ' sub-folder, then choose the folder that contains them. To edit a study, choose its folder again.',
     ]),
     el('div', { className: 'row' }, [pick, filesInput]),
+    pickNote,
     ...(found ? [found] : []),
   ]);
 
@@ -270,6 +278,8 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     ]),
   );
 }
+
+const reading = (name: string) => `Reading “${name}” and checking that every audio file plays…`;
 
 /** Reads a chosen folder into the page state. */
 async function choose(name: string, entries: StudyEntry[], dir?: FileSystemDirectoryHandle) {

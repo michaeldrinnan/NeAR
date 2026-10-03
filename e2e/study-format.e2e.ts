@@ -251,3 +251,42 @@ test('the example study offered for download is a valid study that opens with Op
   await expect(page.locator('.study-title')).toHaveText('Example files');
   await expect(page.locator('.meta')).toContainText('8 voices · 5 references');
 });
+
+test('a 2012 TestItems folder (loose WAVs and an old NeAR.csv) opens on Create and Rate, with feedback throughout', async ({ page }) => {
+  const header = 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,CLICK1.WAV,Copy of phon1.wav,phon2.wav';
+  await mockFolders(page, {
+    TestItems: {
+      'CLICK1.WAV': W('c'),
+      'Copy of phon1.wav': W('p1'),
+      'phon2.wav': W('p2'),
+      'NeAR.csv': `${header}\r\nJim,07 January 2012,10:00:00,TestItems,,0,1,2,3\r\n`,
+    },
+  });
+  await toCreate(page);
+  await chooseFolder(page, 'TestItems');
+  const found = page.locator('.found');
+  await expect(found).toContainText('3 voices to rate, loose in the folder (2012 style)');
+  await expect(found).toContainText('NeAR.csv from an older version');
+  await expect(page.locator('#study-title')).toHaveValue('TestItems');
+
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /Rate a study/ }).click();
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await expect(page.locator('dialog')).toContainText('also has NeAR.csv, from an older version of NeAR, with the same voices (1 session');
+  await page.getByRole('button', { name: 'Carry them on' }).click();
+  await expect(page.locator('.study-title')).toHaveText('TestItems');
+  await expect(page.locator('.meta')).toContainText('3 voices · no references');
+  await expect(page.locator('.results-note')).toContainText('1 session, last on 07 January 2012 so far');
+});
+
+test('cancelling the folder picker (or refusing access) says so instead of doing nothing', async ({ page }) => {
+  await mockFolders(page, {}); // no folder to give: the picker comes back empty, as when cancelled or refused
+  await toCreate(page);
+  await page.getByRole('button', { name: 'Choose study folder…' }).click();
+  await expect(page.locator('.pick-note')).toContainText('No folder was opened');
+  await expect(page.locator('.pick-note')).toContainText('choose Allow (or Edit files) when asked');
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /Rate a study/ }).click();
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await expect(page.locator('.pick-note')).toContainText('No folder was opened');
+});
