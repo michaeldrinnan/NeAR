@@ -13,7 +13,22 @@ export const audioItems = (files: readonly File[], prefix: 's:' | 'r:'): AudioIt
   files.map((file) => ({ id: prefix + file.name, name: file.name, size: file.size, getFile: async () => file }));
 
 /** Chrome/Edge can open folders and write results back into them. */
-export const canUseFolders = typeof window.showDirectoryPicker === 'function';
+export const canUseFolders = typeof window.showDirectoryPicker === 'function' && !inCrossOriginFrame();
+
+/**
+ * True when NeAR is shown inside another site's frame, e.g. VS Code's Simple Browser: Chrome
+ * refuses the folder picker there (SecurityError), though the ordinary folder input still works.
+ */
+function inCrossOriginFrame(): boolean {
+  try {
+    return window.top !== window.self && !window.top!.location.href;
+  } catch {
+    return true; // reading another origin's location throws
+  }
+}
+
+/** When the folder picker fails outright (rather than being cancelled). */
+export const CANT_OPEN_FOLDERS = 'This window can’t open folders. Open NeAR in Chrome or Edge, or use Open study file… with a zip.';
 
 /** Where an open study came from: decides where its results go, and how Recent studies reopen it. */
 export type StudyOrigin =

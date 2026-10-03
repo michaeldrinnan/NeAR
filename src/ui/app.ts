@@ -2,7 +2,7 @@ import { summarize } from '../lib/csv';
 import { forgetRecent, listRecent, reopenRecent, type RecentStudy } from '../lib/recent';
 import { notDownloaded, readStudyLines, readStudyRecord, studyId } from '../lib/studies';
 import { downloadStudyResults } from '../lib/results';
-import { canUseFolders, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
+import { canUseFolders, CANT_OPEN_FOLDERS, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
 import { studyCode, studyFileName } from '../lib/studyFormat';
 import { showCreate } from './create';
 import { alertBox, ask } from './dialog';
@@ -207,8 +207,9 @@ async function showRate(back: () => void) {
     folderNote.textContent = '';
     try {
       dir = await pickStudyFolder();
-    } catch (e) {
-      return void alertBox(`Couldn't open that folder.\n\n${(e as Error).message}`);
+    } catch {
+      folderNote.textContent = CANT_OPEN_FOLDERS;
+      return;
     }
     if (!dir) {
       folderNote.textContent = NO_FOLDER_NOTE;

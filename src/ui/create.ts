@@ -1,6 +1,6 @@
 import { parseLines, summarize } from '../lib/csv';
 import { downloadBlob } from '../lib/results';
-import { canUseFolders, filesEntries, folderEntries, NO_FOLDER_NOTE, pickStudyFolder, type OpenStudy } from '../lib/sources';
+import { canUseFolders, CANT_OPEN_FOLDERS, filesEntries, folderEntries, NO_FOLDER_NOTE, pickStudyFolder, type OpenStudy } from '../lib/sources';
 import {
   baseName,
   defaultDefinition,
@@ -74,13 +74,18 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       return;
     }
     let dir: FileSystemDirectoryHandle | null;
+    pickNote.textContent = '';
     try {
-      pickNote.textContent = '';
       dir = await pickStudyFolder();
-      if (!dir) {
-        pickNote.textContent = NO_FOLDER_NOTE;
-        return;
-      }
+    } catch {
+      pickNote.textContent = CANT_OPEN_FOLDERS;
+      return;
+    }
+    if (!dir) {
+      pickNote.textContent = NO_FOLDER_NOTE;
+      return;
+    }
+    try {
       pick.disabled = true;
       pickNote.textContent = reading(dir.name);
       await choose(dir.name, await folderEntries(dir), dir);

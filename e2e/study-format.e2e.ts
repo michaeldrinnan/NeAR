@@ -290,3 +290,44 @@ test('cancelling the folder picker (or refusing access) says so instead of doing
   await page.getByRole('button', { name: 'Open study folder…' }).click();
   await expect(page.locator('.pick-note')).toContainText('No folder was opened');
 });
+
+test('where the folder picker is refused (SecurityError), Create and Rate say what to do instead', async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      value: async () => {
+        throw new DOMException("Cross origin sub frames aren't allowed to show a file picker.", 'SecurityError');
+      },
+    }),
+  );
+  const cant = 'This window can’t open folders. Open NeAR in Chrome or Edge, or use Open study file… with a zip.';
+  await toCreate(page);
+  await page.getByRole('button', { name: 'Choose study folder…' }).click();
+  await expect(page.locator('.pick-note')).toHaveText(cant);
+  await expect(page.locator('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /Rate a study/ }).click();
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await expect(page.locator('.pick-note')).toHaveText(cant);
+});
+
+test('shown inside another page’s frame (e.g. VS Code’s Simple Browser), folders are chosen with the ordinary file chooser', async ({ page }) => {
+  // A second local page that shows NeAR in a frame, as an editor's preview does.
+  // @ts-ignore Node's http module, used only by this test
+  const { createServer } = await import('node:http');
+  const server = createServer((_req: unknown, res: { setHeader(k: string, v: string): void; end(s: string): void }) => {
+    res.setHeader('content-type', 'text/html');
+    res.end('<iframe id="f" src="http://localhost:4174/" style="width:900px;height:900px"></iframe>');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve)); // any free port
+  try {
+    await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
+    const frame = page.frameLocator('#f');
+    await frame.getByRole('button', { name: /Create a study/ }).click();
+    const chooser = page.waitForEvent('filechooser');
+    await frame.getByRole('button', { name: 'Choose study folder…' }).click();
+    await (await chooser).setFiles('public/examples');
+    await expect(frame.locator('.found')).toContainText('8 voices to rate in Test');
+  } finally {
+    server.close();
+  }
+});
