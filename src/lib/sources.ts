@@ -27,6 +27,10 @@ function inCrossOriginFrame(): boolean {
   }
 }
 
+/** Why Create a study is unavailable in browsers (or windows) that can't give NeAR access to a folder. */
+export const CREATE_NEEDS_FOLDERS =
+  'Creating a study needs Chrome or Edge on a computer. You can still rate studies here.';
+
 /** When the folder picker fails outright (rather than being cancelled). */
 export const CANT_OPEN_FOLDERS = 'This window can’t open folders. Open NeAR in Chrome or Edge, or use Open study file… with a zip.';
 

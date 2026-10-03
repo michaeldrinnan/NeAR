@@ -1,6 +1,6 @@
 import { parseLines, summarize } from '../lib/csv';
 import { downloadBlob } from '../lib/results';
-import { canUseFolders, CANT_OPEN_FOLDERS, filesEntries, folderEntries, NO_FOLDER_NOTE, pickStudyFolder, type OpenStudy } from '../lib/sources';
+import { canUseFolders, CANT_OPEN_FOLDERS, CREATE_NEEDS_FOLDERS, folderEntries, NO_FOLDER_NOTE, pickStudyFolder, type OpenStudy } from '../lib/sources';
 import {
   baseName,
   defaultDefinition,
@@ -39,8 +39,8 @@ const OPTION_LABELS: [OptionKey, string][] = [
 /** The study folder chosen on the Create page. Kept while NeAR is open, so Try it now can come back to it. */
 interface Chosen {
   name: string;
-  /** Chrome/Edge: the folder itself, so Save can write study.txt into it. */
-  dir?: FileSystemDirectoryHandle;
+  /** The folder itself, so Save can write study.txt into it. */
+  dir: FileSystemDirectoryHandle;
   layout: StudyLayout;
   samples: File[];
   references: File[];
@@ -60,19 +60,17 @@ let draft: StudyDefinition | null = null;
 let message = '';
 
 export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study: OpenStudy) => void): void {
+  if (!canUseFolders) {
+    // Home disables Create a study here; this is a safety net if the page is reached anyway.
+    root.replaceChildren(page([backNav(back), el('h1', { textContent: 'Create a study' }), el('p', { className: 'panel tone-create', textContent: CREATE_NEEDS_FOLDERS })]));
+    return;
+  }
   const render = () => showCreate(root, back, tryStudy);
 
   // ---- step 1: the folder ----
   const pick = el('button', { type: 'button', className: 'primary', textContent: 'Choose study folder…' });
-  const filesInput = el('input', { type: 'file', hidden: true, multiple: true });
-  filesInput.webkitdirectory = true;
   const pickNote = el('p', { className: 'note pick-note', 'aria-live': 'polite' });
   pick.addEventListener('click', async () => {
-    if (!canUseFolders) {
-      filesInput.value = '';
-      filesInput.click();
-      return;
-    }
     let dir: FileSystemDirectoryHandle | null;
     pickNote.textContent = '';
     try {
@@ -94,18 +92,6 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     }
     render();
   });
-  filesInput.addEventListener('change', async () => {
-    if (!filesInput.files?.length) return;
-    const { name, entries } = filesEntries(filesInput.files);
-    pick.disabled = true;
-    pickNote.textContent = reading(name);
-    try {
-      await choose(name, entries);
-    } catch (e) {
-      await alertBox(`Couldn't read that folder.\n\n${(e as Error).message}`);
-    }
-    render();
-  });
 
   const ready = !!chosen && !chosen.problem && !chosen.textError && !!draft;
   const step = (n: number, title: string, body: Node[], enabled = true) =>
@@ -121,7 +107,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       ' sub-folder and any reference voices in a ', el('span', { className: 'mono', textContent: 'Ref' }),
       ' sub-folder, then choose the folder that contains them. To edit a study, choose its folder again.',
     ]),
-    el('div', { className: 'row' }, [pick, filesInput]),
+    el('div', { className: 'row' }, [pick]),
     pickNote,
     ...(found ? [found] : []),
   ]);
@@ -214,18 +200,13 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     const id = await current();
     const text = writeStudyText(def);
     try {
-      if (chosen.dir) {
-        const name = chosen.layout.studyText ? baseName(chosen.layout.studyText.path) : STUDY_FILE;
-        const handle = await chosen.dir.getFileHandle(name, { create: true });
-        const out = await handle.createWritable();
-        await out.write(text);
-        await out.close();
-        chosen.layout.studyText = { path: name, file: () => handle.getFile() };
-        message = `Saved ${name} in “${chosen.name}”. Study code #${studyCode(id)}.`;
-      } else {
-        downloadBlob(new Blob([text], { type: 'text/plain' }), STUDY_FILE);
-        message = `Downloaded ${STUDY_FILE}. Put it in the study folder “${chosen.name}”, replacing any older copy.`;
-      }
+      const name = chosen.layout.studyText ? baseName(chosen.layout.studyText.path) : STUDY_FILE;
+      const handle = await chosen.dir.getFileHandle(name, { create: true });
+      const out = await handle.createWritable();
+      await out.write(text);
+      await out.close();
+      chosen.layout.studyText = { path: name, file: () => handle.getFile() };
+      message = `Saved ${name} in “${chosen.name}”. Study code #${studyCode(id)}.`;
       chosen.savedIdentity = id;
       status.textContent = message;
       void changed();
@@ -261,7 +242,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       identity: id,
       hasDefinition: chosen.savedIdentity === id,
       results: chosen.results,
-      origin: chosen.dir ? { kind: 'folder', dir: chosen.dir } : { kind: 'files', name: chosen.name },
+      origin: { kind: 'folder', dir: chosen.dir },
       folderName: chosen.name,
     });
   });
@@ -274,9 +255,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       el('div', { className: 'row' }, [save, zip, tryIt]),
       status,
       el('p', { className: 'callout' }, [
-        canUseFolders
-          ? `Save writes ${STUDY_FILE} into the study folder, and results go to a file named after the study in the same folder. `
-          : `This browser can’t write to folders, so Save downloads ${STUDY_FILE} for you to put in the study folder, and results are kept in this browser. `,
+        `Save writes ${STUDY_FILE} into the study folder, and results go to a file named after the study in the same folder. `,
         'Any change to the voices, options, title or instructions gives the study a new code, so its results start in a new file. ',
         'Voices can be WAV, MP3, M4A, AAC, FLAC, Ogg or Opus files, mixed as you like. A 2012-style folder with the audio files loose at the top (no Test sub-folder) is treated as the voices to rate.',
       ]),
@@ -287,7 +266,7 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
 const reading = (name: string) => `Reading “${name}” and checking that every audio file plays…`;
 
 /** Reads a chosen folder into the page state. */
-async function choose(name: string, entries: StudyEntry[], dir?: FileSystemDirectoryHandle) {
+async function choose(name: string, entries: StudyEntry[], dir: FileSystemDirectoryHandle) {
   const layout = layoutStudy(entries);
   const load = (list: StudyEntry[]) => Promise.all(list.map(async (e) => named(await e.file(), baseName(e.path))));
   const samples = await load(layout.samples);

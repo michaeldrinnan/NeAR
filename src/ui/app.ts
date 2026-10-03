@@ -2,7 +2,7 @@ import { summarize } from '../lib/csv';
 import { forgetRecent, listRecent, reopenRecent, type RecentStudy } from '../lib/recent';
 import { notDownloaded, readStudyLines, readStudyRecord, studyId } from '../lib/studies';
 import { downloadStudyResults } from '../lib/results';
-import { canUseFolders, CANT_OPEN_FOLDERS, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
+import { canUseFolders, CANT_OPEN_FOLDERS, CREATE_NEEDS_FOLDERS, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
 import { studyCode, studyFileName } from '../lib/studyFormat';
 import { showCreate } from './create';
 import { alertBox, ask } from './dialog';
@@ -39,8 +39,8 @@ export function go(name: PageName): void {
 }
 
 function showHome() {
-  const bar = (target: PageName, tone: string, title: string, text: string) => {
-    const b = el('button', { type: 'button', className: `bar tone-${tone}` }, [
+  const bar = (target: PageName, tone: string, title: string, text: string, disabled = false) => {
+    const b = el('button', { type: 'button', className: `bar tone-${tone}`, disabled }, [
       el('span', { className: 't' }, [el('h2', { textContent: title }), el('span', { className: 'muted', textContent: text })]),
       el('span', { className: 'arr', 'aria-hidden': 'true', textContent: '›' }),
     ]);
@@ -51,7 +51,10 @@ function showHome() {
     page([
       el('div', { className: 'bars' }, [
         bar('newto', 'new', 'New to NeAR?', 'See how it works and try an example study.'),
-        bar('create', 'create', 'Create a study', 'Choose a folder of voices, set the options, and save it as a study.'),
+        // Creating a study needs folder access (Chrome or Edge on a computer); elsewhere the bar says so.
+        canUseFolders
+          ? bar('create', 'create', 'Create a study', 'Choose a folder of voices, set the options, and save it as a study.')
+          : bar('create', 'create', 'Create a study', CREATE_NEEDS_FOLDERS, true),
         bar('rate', 'rate', 'Rate a study', 'Carry on, open a study you were sent, or try an example.'),
         bar('results', 'results', 'Results', 'Download, import or delete results kept in this browser.'),
       ]),

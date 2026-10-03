@@ -33,7 +33,7 @@ web server…). The build uses relative paths, so it also works from a sub-folde
 Home has four bars, each opening its own page with a large **Back** button:
 
 - **New to NeAR?** — a short introduction, *Try the example* and the user manual.
-- **Create a study** — choose a study folder (`Test/` and `Ref/` sub-folders of audio files: WAV, MP3, M4A/AAC, FLAC, Ogg/Opus), set
+- **Create a study** (Chrome or Edge on a computer) — choose a study folder (`Test/` and `Ref/` sub-folders of audio files: WAV, MP3, M4A/AAC, FLAC, Ogg/Opus), set
   the options On or Off, give it a title and instructions, then *Save* (writes `study.txt`),
   *Save as zip…* or *Try it now*. Editing a study means choosing its folder again.
 - **Rate a study** — example studies, *Carry on* with the last study, recent studies, and
@@ -61,8 +61,8 @@ study unpacked, for the tests. Regenerate them with `npm run examples`.
 
 | | Chrome / Edge (desktop) | Safari, Firefox, iPad, phones |
 |---|---|---|
-| Choose a study folder | Folder picker | Folder picker (read only) |
-| Save on the Create page | Writes `study.txt` into the folder | Downloads `study.txt` |
+| Create a study | Yes | No: the Home bar says it needs Chrome or Edge on a computer |
+| Open a study folder to rate | Folder picker | Folder chooser (read only) |
 | Results of a folder study | `NeAR_<title>_<code>.csv` **in the study folder** | Kept in the browser; download from Results |
 | Results of a study `.zip` | Kept in the browser; download from Results | Kept in the browser; download from Results |
 | Recent studies | Zips and folders (one click to re-grant access) | Zips only |

@@ -145,6 +145,8 @@ p { margin: 0; }
   border-radius: 8px;
 }
 .bar:hover { background: var(--tint); filter: brightness(1.15); }
+.bar:disabled, .bar:disabled:hover { opacity: 0.55; filter: none; cursor: not-allowed; }
+.bar:disabled .arr { visibility: hidden; }
 .bar .t { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .bar h2 { font-size: 1.3rem; }
 .bar .arr { font-size: 2rem; color: var(--tone); line-height: 1; }

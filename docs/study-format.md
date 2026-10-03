@@ -140,6 +140,14 @@ each with its short prompt (*Put the BEST sample here at top left.*, and the unr
 
 ## 4. Creating or editing a study
 
+*Create a study* needs a browser that can give NeAR access to a folder: Chrome or Edge on a
+computer, opened directly (not inside another app's preview frame, such as VS Code's Simple
+Browser, where the folder picker is refused). This is detected from the browser's abilities,
+not its name. Elsewhere (Safari, Firefox, iPad) the Home bar is greyed out with *Creating a
+study needs Chrome or Edge on a computer.*, and the page can't be opened. Rating works in
+every browser. If the folder picker still fails in a capable browser, the page says
+*This window can't open folders…*.
+
 *Create a study* works on one study folder:
 
 1. **Choose study folder…** — shows what was found (voices, references, `study.txt`, results
@@ -152,8 +160,7 @@ each with its short prompt (*Put the BEST sample here at top left.*, and the unr
 The page shows the **study code** as it stands, the results file it goes with, and whether it
 matches the saved `study.txt`. The buttons:
 
-- **Save** — in Chrome/Edge, writes `study.txt` into the folder. Other browsers can't write
-  to folders, so Save downloads `study.txt` to put in the folder by hand.
+- **Save** — writes `study.txt` into the folder.
 - **Save as zip…** — downloads the whole study as `NeAR_<title>_<code>.zip` (`study.txt`,
   `Test/`, `Ref/`), to email, put on a web server, or open with *Open study file…*.
 - **Try it now** — opens the study as it stands on the rating screen; Back returns to the page.

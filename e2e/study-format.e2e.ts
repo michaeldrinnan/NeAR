@@ -186,18 +186,18 @@ test('Create: folders that can’t be studies keep the page locked with a plain 
   await expect(page.getByRole('button', { name: 'Try it now' })).toBeEnabled();
 });
 
-test('Create without folder access (Safari, Firefox): pick the folder’s files; Save downloads study.txt', async ({ page }) => {
+test('without folder access (Safari, Firefox, iPad), Create a study is unavailable, with the reason; rating still works', async ({ page }) => {
   await page.addInitScript(() => delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker);
-  await toCreate(page);
-  await page.locator('input[type="file"]').setInputFiles('public/examples');
-  await expect(page.locator('.found')).toContainText('8 voices to rate in Test');
-  await expect(page.locator('.found')).toContainText('5 reference voices in Ref');
-  await expect(page.locator('.found')).toContainText('Settings read from study.txt.');
-  await expect(page.locator('#study-title')).toHaveValue('Example files');
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  expect((await download).suggestedFilename()).toBe('study.txt');
-  await expect(page.locator('.status')).toContainText('Put it in the study folder');
+  await page.goto('/');
+  const create = page.getByRole('button', { name: /Create a study/ });
+  await expect(create).toBeDisabled();
+  await expect(create).toContainText('Creating a study needs Chrome or Edge on a computer.');
+  // Rating a folder study still works, with the ordinary folder chooser.
+  await page.getByRole('button', { name: /Rate a study/ }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await (await chooser).setFiles('public/examples');
+  await expect(page.locator('.study-title')).toHaveText('Example files');
 });
 
 test('a study that cannot be used is refused with a plain explanation', async ({ page }) => {
@@ -310,7 +310,7 @@ test('where the folder picker is refused (SecurityError), Create and Rate say wh
   await expect(page.locator('.pick-note')).toHaveText(cant);
 });
 
-test('shown inside another page’s frame (e.g. VS Code’s Simple Browser), folders are chosen with the ordinary file chooser', async ({ page }) => {
+test('inside another page’s frame (e.g. VS Code’s Simple Browser), Create is unavailable and study folders open with the ordinary file chooser', async ({ page }) => {
   // A second local page that shows NeAR in a frame, as an editor's preview does.
   // @ts-ignore Node's http module, used only by this test
   const { createServer } = await import('node:http');
@@ -322,11 +322,14 @@ test('shown inside another page’s frame (e.g. VS Code’s Simple Browser), fol
   try {
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const frame = page.frameLocator('#f');
-    await frame.getByRole('button', { name: /Create a study/ }).click();
+    // The folder picker is refused in a frame, so Create a study is unavailable there…
+    await expect(frame.getByRole('button', { name: /Create a study/ })).toBeDisabled();
+    // …but a study folder can still be opened to rate, with the ordinary file chooser.
+    await frame.getByRole('button', { name: /Rate a study/ }).click();
     const chooser = page.waitForEvent('filechooser');
-    await frame.getByRole('button', { name: 'Choose study folder…' }).click();
+    await frame.getByRole('button', { name: 'Open study folder…' }).click();
     await (await chooser).setFiles('public/examples');
-    await expect(frame.locator('.found')).toContainText('8 voices to rate in Test');
+    await expect(frame.locator('.study-title')).toHaveText('Example files');
   } finally {
     server.close();
   }
