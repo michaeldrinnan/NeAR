@@ -34,9 +34,9 @@ Home has four bars, each opening its own page with a large **Back** button:
 
 - **New to NeAR?** — a short introduction, *Try the example* and the user manual.
 - **Create a study** (Chrome or Edge on a computer) — choose a study folder (`Test/` and `Ref/` sub-folders of audio files: WAV, MP3, M4A/AAC, FLAC, Ogg/Opus), set
-  the options On or Off, give it a title and instructions. Changes are saved to `study.txt` as you
-  go (*Undo all changes* puts it back); *Try without saving results* and *Save as zip…*. Editing a
-  study means choosing its folder again.
+  the options On or Off, give it a title and instructions, then *Save* (writes `study.txt`; Back
+  leaves without saving; *Undo all changes* goes back to how the folder was), *Try without saving
+  results* or *Save as zip…*. Editing a study means choosing its folder again.
 - **Rate a study** — example studies, *Carry on* with the last study, recent studies, and
   *A study you were sent* (a `.zip` or a folder). Opening a study shows its Study info
   screen, where a session name must be entered before rating; the rating screen then holds just

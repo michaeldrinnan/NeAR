@@ -55,12 +55,10 @@ interface Chosen {
   hashes: Promise<{ test: [string, string][]; ref: [string, string][] }>;
   /** Sessions already saved for the study as it was when the folder was chosen. */
   savedSessions: number;
-  /** The user has agreed to change a study that already has sessions. */
-  editConfirmed: boolean;
-  /** study.txt has been written since the folder was chosen (so there is something to undo). */
+  /** Edited since the folder was chosen or last saved. */
+  edited: boolean;
+  /** study.txt has been saved since the folder was chosen (so Undo has a file to put back). */
   written: boolean;
-  /** Write study.txt for the defaults as soon as the page shows (no study.txt yet, or Start from the defaults). */
-  autoWrite: boolean;
   /** Puts study.txt (and the page) back as they were when the folder was chosen. */
   restore(): Promise<void>;
 }
@@ -127,15 +125,15 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
   const segs = OPTION_LABELS.map(([key, label]) => {
     const on = el('button', { type: 'button', textContent: 'On', 'aria-pressed': String(def.options[key]) });
     const off = el('button', { type: 'button', textContent: 'Off', 'aria-pressed': String(!def.options[key]) });
-    const set = async (value: boolean) => {
-      if (def.options[key] === value || !(await mayEdit())) return;
+    const set = (value: boolean) => {
+      if (def.options[key] === value) return;
       def.options[key] = value;
       on.setAttribute('aria-pressed', String(value));
       off.setAttribute('aria-pressed', String(!value));
-      void changed(true);
+      edited();
     };
-    on.addEventListener('click', () => void set(true));
-    off.addEventListener('click', () => void set(false));
+    on.addEventListener('click', () => set(true));
+    off.addEventListener('click', () => set(false));
     return el('div', { className: 'opt' }, [
       el('span', { textContent: label }),
       el('span', { className: 'seg', role: 'group', 'aria-label': label, 'data-option': key }, [on, off]),
@@ -147,39 +145,14 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
   const title = el('input', { id: 'study-title', className: 'ftitle', type: 'text', value: def.title, maxLength: TITLE_MAX + 20, autocomplete: 'off' });
   const titleNote = el('p', { className: 'field-note', hidden: true });
   const instructions = el('textarea', { id: 'study-instructions', className: 'finstr', rows: 3, value: def.instructions.join('\n') });
-  // Typing saves a moment after it stops, or on leaving the box.
-  let typing: ReturnType<typeof setTimeout> | undefined;
-  const typed = () => {
-    clearTimeout(typing);
-    void changed(false);
-    typing = setTimeout(() => {
-      typing = undefined;
-      void changed(true);
-    }, 700);
-  };
-  const flush = () => {
-    if (typing === undefined) return;
-    clearTimeout(typing);
-    typing = undefined;
-    void changed(true);
-  };
-  const editText = (box: HTMLInputElement | HTMLTextAreaElement, apply: () => void, shown: () => string) => {
-    box.addEventListener('input', async () => {
-      if (!guardPending()) {
-        apply();
-        return typed();
-      }
-      const wanted = box.value;
-      box.value = shown(); // hold the change until it is confirmed
-      if (!(await mayEdit())) return;
-      box.value = wanted;
-      apply();
-      typed();
-    });
-    box.addEventListener('blur', flush);
-  };
-  editText(title, () => (def.title = tidyTitle(title.value)), () => def.title);
-  editText(instructions, () => (def.instructions = instructions.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)), () => def.instructions.join('\n'));
+  title.addEventListener('input', () => {
+    def.title = tidyTitle(title.value);
+    edited();
+  });
+  instructions.addEventListener('input', () => {
+    def.instructions = instructions.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    edited();
+  });
   const step3 = step(3, 'Title and instructions', [
     el('label', { className: 'flabel', htmlFor: 'study-title', textContent: 'Study title' }),
     title,
@@ -188,40 +161,37 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     instructions,
   ], ready);
 
-  // ---- the study code, saving as you go, and the buttons ----
+  // ---- the study code, and the buttons ----
   const codeLine = el('p', { className: 'note code-line', hidden: !ready });
-  const undo = el('button', { type: 'button', textContent: 'Undo all changes', disabled: !chosen?.written });
+  const save = el('button', { type: 'button', className: 'primary', textContent: 'Save', disabled: true });
+  const tryIt = el('button', { type: 'button', textContent: 'Try without saving results', disabled: true });
   const zip = el('button', { type: 'button', textContent: 'Save as zip…', disabled: true });
-  const tryIt = el('button', { type: 'button', className: 'primary', textContent: 'Try without saving results', disabled: true });
+  const undo = el('button', { type: 'button', textContent: 'Undo all changes', disabled: true });
   const status = el('p', { className: 'note status', 'aria-live': 'polite', textContent: ready ? message : 'Choose a study folder to continue.' });
 
-  /** Editing a study that already has sessions makes a new version: ask once, the first time. */
-  const guardPending = () => !!chosen && chosen.savedSessions > 0 && !chosen.editConfirmed;
-  async function mayEdit(): Promise<boolean> {
-    if (!chosen || !guardPending()) return true;
-    const n = chosen.savedSessions;
-    const key = await ask(
-      `This study has ${n} session${n === 1 ? '' : 's'} saved. Changing it makes a new version with its own results file; ` +
-        'the results saved so far stay in their file.',
-      [
-        { label: 'Change it', value: 'yes' as const, primary: true },
-        { label: 'Cancel', value: 'no' as const },
-      ],
-      'Change this study?',
-      'no',
-    );
-    if (key === 'yes') chosen.editConfirmed = true;
-    return key === 'yes';
+  /** Changes not yet saved: anything edited since the folder was chosen or last saved, or no study.txt yet. */
+  const unsaved = () => !!chosen && (chosen.edited || !chosen.layout.studyText);
+  const sync = () => {
+    if (!chosen) return;
+    save.disabled = !ready || !!titleProblem(title.value) || !unsaved();
+    undo.disabled = !chosen.edited && !chosen.written;
+  };
+  function edited() {
+    if (!chosen) return;
+    chosen.edited = true;
+    status.textContent = message = 'Unsaved changes: Save writes them to study.txt; Back leaves without saving.';
+    void changed();
   }
 
   let identity: string | null = null;
   let version = 0;
-  /** Updates the code and checks the title; with `save`, writes study.txt (only a usable title is saved). */
-  async function changed(save: boolean) {
+  /** Checks the title and works out the study code as it stands. */
+  async function changed() {
     const problem = ready ? titleProblem(title.value) : 'not ready';
     titleNote.hidden = !ready || !problem;
-    titleNote.textContent = ready && problem ? `${problem} Not saved until it is corrected.` : '';
+    titleNote.textContent = ready && problem ? problem : '';
     for (const b of [zip, tryIt]) b.disabled = !!problem;
+    sync();
     if (!ready || problem || !chosen) {
       identity = null;
       codeLine.textContent = problem && ready ? 'Correct the title to see the study code.' : '';
@@ -233,37 +203,10 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     if (mine !== version) return; // a later change has taken over
     identity = id;
     codeLine.replaceChildren(`Study code #${studyCode(id)}. Results go to `, el('span', { className: 'mono', textContent: studyFileName(def.title, id, 'csv') }), '.');
-    if (save && chosen.savedIdentity !== id) await persist(id);
   }
-
-  let writing = Promise.resolve();
-  /** Writes study.txt into the folder (one write at a time, in order). */
-  function persist(id: string): Promise<void> {
-    const c = chosen!;
-    const text = writeStudyText(def);
-    writing = writing.then(async () => {
-      try {
-        const name = c.layout.studyText ? baseName(c.layout.studyText.path) : STUDY_FILE;
-        const handle = await c.dir.getFileHandle(name, { create: true });
-        const out = await handle.createWritable();
-        await out.write(text);
-        await out.close();
-        c.layout.studyText = { path: name, file: () => handle.getFile() };
-        c.savedIdentity = id;
-        c.written = true;
-        undo.disabled = false;
-        status.textContent = message = `Saved to ${name} in “${c.name}” · study code #${studyCode(id)}.`;
-      } catch (e) {
-        status.textContent = message = `Couldn't save ${STUDY_FILE}: ${(e as Error).message}`;
-      }
-    });
-    return writing;
-  }
-  // A folder with no study.txt (or after "Start from the defaults") gets one straight away.
-  void changed(!!chosen && ready && chosen.autoWrite && chosen.savedIdentity === null);
+  void changed();
 
   const current = async (): Promise<string> => {
-    flush();
     while (!identity) {
       await new Promise((r) => setTimeout(r, 20));
       if (!chosen || !draft) throw new Error('No study folder chosen.');
@@ -271,14 +214,50 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     return identity;
   };
 
+  save.addEventListener('click', async () => {
+    if (!chosen || !draft) return;
+    const c = chosen;
+    const id = await current();
+    // Saving a change to a study that already has sessions makes a new version: ask first.
+    if (c.savedSessions > 0 && c.savedIdentity && id !== c.savedIdentity) {
+      const n = c.savedSessions;
+      const key = await ask(
+        `This study has ${n} session${n === 1 ? '' : 's'} saved. Saving these changes makes a new version with its own ` +
+          'results file; the results saved so far stay in their file.',
+        [
+          { label: 'Save as a new version', value: 'yes' as const, primary: true },
+          { label: 'Cancel', value: 'no' as const },
+        ],
+        'Change this study?',
+        'no',
+      );
+      if (key !== 'yes') return;
+    }
+    try {
+      const name = c.layout.studyText ? baseName(c.layout.studyText.path) : STUDY_FILE;
+      const handle = await c.dir.getFileHandle(name, { create: true });
+      const out = await handle.createWritable();
+      await out.write(writeStudyText(def));
+      await out.close();
+      c.layout.studyText = { path: name, file: () => handle.getFile() };
+      if (id !== c.savedIdentity) c.savedSessions = 0; // a new version starts with no sessions
+      c.savedIdentity = id;
+      c.written = true;
+      c.edited = false;
+      status.textContent = message = `Saved to ${name} in “${c.name}” · study code #${studyCode(id)}.`;
+      sync();
+    } catch (e) {
+      await alertBox(`Couldn't save ${STUDY_FILE}.\n\n${(e as Error).message}`);
+    }
+  });
+
   undo.addEventListener('click', async () => {
     if (!chosen) return;
-    clearTimeout(typing);
-    typing = undefined;
-    await writing;
     try {
       await chosen.restore();
-      message = `Undone: ${STUDY_FILE} is back as it was when you chose the folder.`;
+      message = chosen.layout.studyText
+        ? `Undone: back to ${STUDY_FILE} as it was when you chose the folder.`
+        : 'Undone: back to how the folder was when you chose it.';
     } catch (e) {
       await alertBox(`Couldn't undo the changes.\n\n${(e as Error).message}`);
     }
@@ -304,7 +283,6 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
   tryIt.addEventListener('click', async () => {
     if (!chosen || !draft) return;
     const id = await current();
-    await writing;
     tryStudy({
       definition: structuredClone(def),
       warnings: [],
@@ -318,10 +296,22 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
     });
   });
 
-  // Back saves anything still being typed first.
+  // Back leaves without saving; if there are unsaved edits, it asks first.
   const leave = async () => {
-    flush();
-    await writing;
+    if (chosen?.edited) {
+      const key = await ask(
+        'Your changes to this study haven’t been saved. If you leave now, they will be lost.',
+        [
+          { label: 'Keep editing', value: 'keep' as const, primary: true },
+          { label: 'Leave without saving', value: 'leave' as const, danger: true },
+        ],
+        'Leave without saving?',
+        'keep',
+      );
+      if (key !== 'leave') return;
+      chosen = null; // unsaved edits are dropped; what was saved stays saved
+      draft = null;
+    }
     back();
   };
   root.replaceChildren(
@@ -329,10 +319,10 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
       backNav(() => void leave()),
       el('h1', { textContent: 'Create or edit a study' }),
       el('section', { className: 'panel tone-create steps' }, [step1, step2, step3, codeLine]),
-      el('div', { className: 'row' }, [tryIt, zip, undo]),
+      el('div', { className: 'row' }, [save, tryIt, zip, undo]),
       status,
       el('p', { className: 'callout' }, [
-        `Changes are saved to ${STUDY_FILE} in the study folder as you make them; Undo all changes puts it back as it was when you chose the folder. `,
+        `Save writes ${STUDY_FILE} into the study folder; Back leaves without saving; Undo all changes goes back to how the folder was when you chose it. `,
         'Results go to a file named after the study in the same folder. Any change to the voices, options, title or instructions gives the study a new code, so its results start in a new file. ',
         'Try without saving results lets you rate the study as it stands; nothing is written. ',
         'Voices can be WAV, MP3, M4A, AAC, FLAC, Ogg or Opus files, mixed as you like. A 2012-style folder with the audio files loose at the top (no Test sub-folder) is treated as the voices to rate.',
@@ -376,9 +366,8 @@ async function choose(name: string, entries: StudyEntry[], dir: FileSystemDirect
   const savedSessions = resultsFile ? summarize(parseLines(await resultsFile.text())).sessions : 0;
   const c: Chosen = {
     name, dir, layout, samples, references, results, problem, textError, warnings, savedIdentity, hashes, savedSessions,
-    editConfirmed: false,
+    edited: false,
     written: false,
-    autoWrite: !layout.studyText,
     async restore() {
       if (original) {
         const handle = await dir.getFileHandle(original.name, { create: true });
@@ -390,7 +379,7 @@ async function choose(name: string, entries: StudyEntry[], dir: FileSystemDirect
         await dir.removeEntry(baseName(c.layout.studyText.path));
         c.layout.studyText = null;
       }
-      Object.assign(c, { textError, warnings, savedIdentity, editConfirmed: false, written: false, autoWrite: false });
+      Object.assign(c, { textError, warnings, savedIdentity, savedSessions, edited: false, written: false });
       draft = problem || textError ? null : structuredClone(definition);
     },
   };
@@ -413,7 +402,7 @@ function foundBox(c: Chosen, render: () => void): HTMLElement {
   else if (n) items.push([`${n} voice${n === 1 ? '' : 's'} to rate, loose in the folder (2012 style)`]);
   if (layout.refFolder) items.push(r ? [`${r} reference voice${r === 1 ? '' : 's'} in `, mono(layout.refFolder)] : [mono(layout.refFolder), ' is empty, so there are no references']);
   else items.push(['No ', mono('Ref'), ' folder, so there are no references']);
-  if (!layout.studyText) items.push([`No ${STUDY_FILE} yet, so NeAR starts from the defaults and saves them there.`]);
+  if (!layout.studyText) items.push([`No ${STUDY_FILE} yet, so NeAR starts from the defaults. Save creates it.`]);
   else if (!c.textError) items.push([`Settings read from ${STUDY_FILE}.`]);
   for (const f of c.results) {
     if (/^near\.csv$/i.test(f.name)) items.push([mono(f.name), ' from an older version: raters will be offered to carry its sessions on.']);
@@ -438,12 +427,12 @@ function foundBox(c: Chosen, render: () => void): HTMLElement {
     const useDefaults = el('button', { type: 'button', textContent: 'Start from the defaults' });
     useDefaults.addEventListener('click', () => {
       c.textError = null;
-      c.autoWrite = true; // saved straight away, replacing the faulty study.txt (Undo puts it back)
+      c.edited = true; // Save replaces the faulty study.txt (Undo puts it back)
       draft = defaultDefinition(titleFromName(c.name));
       render();
     });
     children.push(
-      el('p', { className: 'problem', role: 'alert', textContent: `${c.textError} Correct ${STUDY_FILE} and choose the folder again, or start from the defaults (which replaces it; Undo puts it back).` }),
+      el('p', { className: 'problem', role: 'alert', textContent: `${c.textError} Correct ${STUDY_FILE} and choose the folder again, or start from the defaults (Save replaces it).` }),
       el('div', { className: 'row' }, [useDefaults]),
     );
   }

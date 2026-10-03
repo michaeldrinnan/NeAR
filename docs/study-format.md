@@ -159,17 +159,17 @@ every browser. If the folder picker still fails in a capable browser, the page s
 
 The page shows the **study code** as it stands and the results file it goes with.
 
-**Changes are saved as you go**, to `study.txt` in the folder: an option as soon as it is
-clicked, the title and instructions a moment after typing stops (or on leaving the box). A
-title that breaks the rules above isn't saved until it is corrected. A folder without
-`study.txt` gets one with the defaults as soon as it is chosen (as does *Start from the
-defaults* after a mistake in the file). A line under the buttons confirms each save.
+The buttons:
 
-- **Changing a study that already has sessions** (its results file for the current code holds
-  any) asks first, once: *This study has N sessions saved. Changing it makes a new version with
-  its own results file…* with *Change it* or *Cancel*. Cancel leaves everything as it was.
-- **Undo all changes** puts `study.txt` back exactly as it was when the folder was chosen
-  (comments and all), or removes it if there wasn't one, and resets the page to match.
+- **Save** — writes `study.txt` into the folder (available when there are unsaved changes, or
+  no `study.txt` yet). A title that breaks the rules above can't be saved until corrected.
+  Saving a change to a study that already has sessions asks first: *This study has N sessions
+  saved. Saving these changes makes a new version with its own results file…*, with *Save as a
+  new version* or *Cancel*.
+- **Back** leaves without saving. If there are unsaved changes it asks first (*Leave without
+  saving?*, with *Keep editing* as the default); what was saved stays saved.
+- **Undo all changes** goes back to how the folder was when it was chosen: `study.txt` exactly
+  as it was (comments and all), or no `study.txt` if there wasn't one, with the page to match.
 - **Try without saving results** opens the study as it stands on the Study info screen (session
   name *Try-out*) and rating screen. Nothing is read or written: no results file, no browser
   results, no Recent studies entry. *Finish try-out* ends it, and Back returns to the page.
