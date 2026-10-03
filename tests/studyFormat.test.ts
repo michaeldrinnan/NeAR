@@ -9,6 +9,7 @@ import {
   makeStudyZip,
   parseStudyFileName,
   parseStudyText,
+  readStudy,
   readStudyZip,
   sourceLabel,
   studyFileName,
@@ -189,6 +190,21 @@ describe('study zips', () => {
     expect(pkg.definition.title).toBe('Nested');
     expect(pkg.samples.map((f) => f.name)).toEqual(['a.wav', 'b.wav']);
     expect(pkg.references.map((f) => f.name)).toEqual(['r.wav']);
+  });
+
+  it('a folder without study.txt has the same code as after saving a defaults-only study.txt', async () => {
+    const audio = { 'Test/a.wav': wavBytes('A'), 'Test/b.wav': wavBytes('B') };
+    const entries = (files: Record<string, Uint8Array>): StudyEntry[] =>
+      Object.entries(files).map(([path, bytes]) => ({ path, file: async () => new File([bytes as Uint8Array<ArrayBuffer>], path.split('/').pop()!) }));
+    const bare = await readStudy(entries(audio), 'Voices 2026.');
+    expect(bare.hasDefinition).toBe(false);
+    expect(bare.definition).toEqual({ title: 'Voices 2026', instructions: [], options: DEFAULT_OPTIONS });
+    const saved = await readStudy(entries({ ...audio, 'study.txt': strToU8(writeStudyText(bare.definition)) }), 'Voices 2026.');
+    expect(saved.hasDefinition).toBe(true);
+    expect(saved.identity).toBe(bare.identity);
+    // Comments, blank options and retired keys don't count either: only the effective definition does.
+    const handWritten = await readStudy(entries({ ...audio, 'study.txt': strToU8('# notes\ntitle = Voices 2026\nversion = 3\nrandom =\n') }), 'Other name');
+    expect(handWritten.identity).toBe(bare.identity);
   });
 
   it('without study.txt use the defaults, titled after the zip', async () => {

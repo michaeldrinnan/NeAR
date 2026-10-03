@@ -48,6 +48,25 @@ test('Create: only the folder step is available until a folder is chosen; then w
   await expect(pressed('play_count')).toHaveText('Off');
   await expect(page.locator('#study-title')).toHaveValue('Dysphonia 2026');
   await expect(page.locator('.code-line')).toContainText(/Study code #[0-9a-f]{8}\. Results go to NeAR_Dysphonia 2026_[0-9a-f]{8}\.csv\. Not saved yet/);
+
+  // The folder runs as it is, with the defaults: the same study (same code, same results file) as after saving them.
+  const code = (await page.locator('.code-line').textContent())!.match(/#([0-9a-f]{8})/)![1];
+  await page.getByRole('button', { name: 'Try it now' }).click();
+  await expect(page.locator('.meta')).toContainText(`study #${code}`);
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /Rate a study/ }).click();
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await expect(page.locator('.study-title')).toHaveText('Dysphonia 2026');
+  await expect(page.locator('.instr')).toBeHidden();
+  await expect(page.locator('.meta')).toContainText(`study #${code}`);
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /Create a study/ }).click();
+  await chooseFolder(page, 'Dysphonia 2026');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('.code-line')).toContainText(`Study code #${code}`);
+  await expect(page.locator('.code-line')).toContainText('Saved in study.txt.');
 });
 
 test('Create: titles that can’t be used in file names are refused with a note', async ({ page }) => {

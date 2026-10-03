@@ -49,6 +49,15 @@ suggesting WAV, MP3 or M4A instead. Results columns use the full file names, ext
 
 ## 2. The definition file, `study.txt`
 
+**A folder without `study.txt`** opens anywhere a folder can be opened and runs with the
+defaults: the title is the folder's name and there are no instructions. In Chrome/Edge, once
+the first session's results have been saved into the folder, NeAR also writes a `study.txt`
+there with exactly those settings (laid out as *Save* on the Create page writes it), so the
+folder keeps its title and options even if it is renamed later. This needs no extra
+permission, and if the folder can't be written to NeAR carries on without it. The study code
+is the same before and after, because it is computed from the effective definition, not the
+file's text (§5), so the results file name doesn't change. Safari and Firefox never write it.
+
 Plain text, one `key = value` per line. Lines starting with `#` are comments; text after
 ` #` on a line is also a comment. Keys are case-insensitive; spaces around `=` don't matter.
 

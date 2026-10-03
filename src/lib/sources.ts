@@ -1,4 +1,4 @@
-import { readStudy, readStudyZip, type StudyEntry, type StudyPackage } from './studyFormat';
+import { readStudy, readStudyZip, STUDY_FILE, writeStudyText, type StudyEntry, type StudyPackage } from './studyFormat';
 
 export interface AudioItem {
   /** Unique within a session ("s:" samples, "r:" references). */
@@ -28,6 +28,8 @@ export interface OpenStudy extends StudyPackage {
   origin: StudyOrigin;
   /** The folder or file it was opened from, for messages. */
   folderName: string;
+  /** A folder opened as it is, with no study.txt: its defaults are written there once results are saved. */
+  writeDefinition?: boolean;
 }
 
 export async function studyFromZip(bytes: Uint8Array, name: string): Promise<OpenStudy> {
@@ -62,7 +64,8 @@ export async function folderEntries(dir: FileSystemDirectoryHandle): Promise<Stu
 const never = (): Promise<File> => Promise.reject(new Error('Not a file'));
 
 export async function studyFromFolder(dir: FileSystemDirectoryHandle): Promise<OpenStudy> {
-  return { ...(await readStudy(await folderEntries(dir), dir.name)), origin: { kind: 'folder', dir }, folderName: dir.name };
+  const pkg = await readStudy(await folderEntries(dir), dir.name);
+  return { ...pkg, origin: { kind: 'folder', dir }, folderName: dir.name, writeDefinition: !pkg.hasDefinition };
 }
 
 /** The entries of an <input webkitdirectory> selection, relative to the chosen folder. */
@@ -83,6 +86,31 @@ export async function studyFromFiles(files: Iterable<File>): Promise<OpenStudy> 
 }
 
 /** Asks for a study folder NeAR may write to; null if the user cancels. */
+/**
+ * Writes study.txt into a folder study that has none, with the settings it was rated with, so
+ * the folder keeps its title and options even if it is renamed. The study code is unchanged.
+ * Called once results have been saved there (NeAR already has write access); failures are ignored.
+ */
+export async function writeMissingDefinition(study: OpenStudy): Promise<void> {
+  if (!study.writeDefinition || study.origin.kind !== 'folder') return;
+  study.writeDefinition = false;
+  try {
+    const dir = study.origin.dir;
+    try {
+      await dir.getFileHandle(STUDY_FILE);
+      return; // one has appeared meanwhile: leave it alone
+    } catch {
+      /* none: write it */
+    }
+    const out = await (await dir.getFileHandle(STUDY_FILE, { create: true })).createWritable();
+    await out.write(writeStudyText(study.definition));
+    await out.close();
+    study.hasDefinition = true;
+  } catch {
+    /* a read-only folder: carry on without it */
+  }
+}
+
 export async function pickStudyFolder(): Promise<FileSystemDirectoryHandle | null> {
   try {
     return await window.showDirectoryPicker!({ id: 'near-study', mode: 'readwrite' });

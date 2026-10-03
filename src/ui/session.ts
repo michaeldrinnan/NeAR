@@ -2,7 +2,7 @@ import { buildHeader, buildRow, computeRanks, raterUsed, summarize } from '../li
 import { downloadLines, downloadStudyResults, folderCopy, legacyResultsFile, resultsFor, saveCopy, type ResultsStore } from '../lib/results';
 import { rememberStudy } from '../lib/recent';
 import { studyId } from '../lib/studies';
-import { audioItems, type OpenStudy } from '../lib/sources';
+import { audioItems, writeMissingDefinition, type OpenStudy } from '../lib/sources';
 import { ratingOptions, sourceLabel, studyCode, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
 import { animateCheckbox, runRating } from './rating';
@@ -77,6 +77,7 @@ export async function rateStudy(root: HTMLElement, study: OpenStudy, back: () =>
     window.addEventListener('beforeunload', warnOnLeave);
     try {
       message = await writeResults(store, lines, study);
+      if (!store.inBrowser && message.startsWith('Saved to')) await writeMissingDefinition(study);
     } finally {
       window.removeEventListener('beforeunload', warnOnLeave);
     }

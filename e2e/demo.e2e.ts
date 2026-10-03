@@ -362,6 +362,48 @@ test('an old plain NeAR.csv with the same voices is offered once, as a copy', as
   await page.getByRole('button', { name: 'Start another session' }).click();
   await expect(page.locator('.results-note')).toContainText('2 sessions');
   await expect(page.locator('dialog')).toHaveCount(0);
+
+  // Saving into the folder also wrote the defaults it was rated with to study.txt, so it keeps its title
+  // and options; the study code, and so the results file, are the same when the folder is opened again.
+  const written = (await folderFiles(page, 'Voices'))['study.txt'];
+  expect(written).toContain('title         = Voices');
+  expect(written).toContain('random        = on');
+  expect(written).toContain('leave_unrated = off');
+  const code = csv.slice(-12, -4);
+  await expect(page.locator('.meta')).toContainText(`study #${code}`);
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await expect(page.locator('.meta')).toContainText(`study #${code}`);
+  await expect(page.locator('.results-note')).toContainText(`${csv} in folder “Voices”. 2 sessions`);
+  expect(Object.keys(await folderFiles(page, 'Voices')).filter((f) => f.startsWith('NeAR_'))).toEqual([csv]);
+});
+
+test('a read-only folder without study.txt still saves its results where it can, and carries on', async ({ page }) => {
+  await mockFolders(page, { Voices: { ...VOICES } });
+  await page.addInitScript(() => {
+    // Refuse to create study.txt, as a folder NeAR may not add files to would.
+    const original = Object.getOwnPropertyDescriptor(window, 'showDirectoryPicker')!.value as () => Promise<{ getFileHandle: (n: string, o?: { create?: boolean }) => Promise<unknown> }>;
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      value: async () => {
+        const dir = await original();
+        const get = dir.getFileHandle.bind(dir);
+        dir.getFileHandle = async (n, o) => {
+          if (n === 'study.txt' && o?.create) throw new DOMException('Not allowed', 'NotAllowedError');
+          return get(n, o);
+        };
+        return dir;
+      },
+    });
+  });
+  await toRate(page);
+  await pickFolder(page, 'Voices');
+  await page.getByRole('button', { name: 'Open study folder…' }).click();
+  await name(page, 'Rater');
+  await page.getByRole('button', { name: 'Save and finish' }).click({ modifiers: ['Control'] });
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect(page.locator('.saved')).toContainText('Saved to NeAR_Voices_');
+  await expect(page.locator('dialog')).toHaveCount(0); // no complaint
+  expect((await folderFiles(page, 'Voices'))['study.txt']).toBeUndefined();
 });
 
 test('only one NeAR session runs at a time across windows, and the download after saving matches what was saved', async ({ context }) => {

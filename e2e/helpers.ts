@@ -145,6 +145,7 @@ export async function mockFolders(page: Page, folders: Record<string, Record<str
         if (!w.nextFolder) throw new DOMException('Cancelled', 'AbortError');
         return dir(w.nextFolder, '');
       },
+      configurable: true, // so a test can wrap it
     });
   }, folders);
 }
