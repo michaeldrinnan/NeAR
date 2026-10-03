@@ -192,8 +192,11 @@ test('without folder access (Safari, Firefox, iPad), Create a study is unavailab
   const create = page.getByRole('button', { name: /Create a study/ });
   await expect(create).toBeDisabled();
   await expect(create).toContainText('Creating a study needs Chrome or Edge on a computer.');
-  // Rating a folder study still works, with the ordinary folder chooser.
+  await expect(page.locator('.frame-hint')).toHaveCount(0); // a browser of its own, not a frame
+  // Rating a folder study still works, with the ordinary folder chooser; a chooser that hands over nothing says so.
   await page.getByRole('button', { name: /Rate a study/ }).click();
+  await page.locator('input[type="file"][webkitdirectory]').dispatchEvent('change'); // a choice with no files in it
+  await expect(page.locator('.pick-note')).toContainText('No files arrived from that folder');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Open study folder…' }).click();
   await (await chooser).setFiles('public/examples');
@@ -322,6 +325,9 @@ test('inside another page’s frame (e.g. VS Code’s Simple Browser), Create is
   try {
     await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/`);
     const frame = page.frameLocator('#f');
+    // A banner says NeAR is limited here, with its address to open in Chrome or Edge.
+    await expect(frame.locator('.frame-hint')).toContainText('NeAR is open inside another app');
+    await expect(frame.locator('.frame-hint a')).toHaveAttribute('href', 'http://localhost:4174/');
     // The folder picker is refused in a frame, so Create a study is unavailable there…
     await expect(frame.getByRole('button', { name: /Create a study/ })).toBeDisabled();
     // …but a study folder can still be opened to rate, with the ordinary file chooser.

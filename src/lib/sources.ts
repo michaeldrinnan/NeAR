@@ -19,7 +19,7 @@ export const canUseFolders = typeof window.showDirectoryPicker === 'function' &&
  * True when NeAR is shown inside another site's frame, e.g. VS Code's Simple Browser: Chrome
  * refuses the folder picker there (SecurityError), though the ordinary folder input still works.
  */
-function inCrossOriginFrame(): boolean {
+export function inCrossOriginFrame(): boolean {
   try {
     return window.top !== window.self && !window.top!.location.href;
   } catch {
@@ -30,6 +30,10 @@ function inCrossOriginFrame(): boolean {
 /** Why Create a study is unavailable in browsers (or windows) that can't give NeAR access to a folder. */
 export const CREATE_NEEDS_FOLDERS =
   'Creating a study needs Chrome or Edge on a computer. You can still rate studies here.';
+
+/** When a folder chooser comes back with no files (some embedded views never pass them on). */
+export const NO_FILES_NOTE =
+  'No files arrived from that folder. This window may not be able to read folders: open NeAR in Chrome or Edge, or use Open study file… with a zip.';
 
 /** When the folder picker fails outright (rather than being cancelled). */
 export const CANT_OPEN_FOLDERS = 'This window can’t open folders. Open NeAR in Chrome or Edge, or use Open study file… with a zip.';

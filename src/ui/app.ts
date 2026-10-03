@@ -2,7 +2,7 @@ import { summarize } from '../lib/csv';
 import { forgetRecent, listRecent, reopenRecent, type RecentStudy } from '../lib/recent';
 import { notDownloaded, readStudyLines, readStudyRecord, studyId } from '../lib/studies';
 import { downloadStudyResults } from '../lib/results';
-import { canUseFolders, CANT_OPEN_FOLDERS, CREATE_NEEDS_FOLDERS, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
+import { canUseFolders, CANT_OPEN_FOLDERS, CREATE_NEEDS_FOLDERS, NO_FILES_NOTE, filesEntries, NO_FOLDER_NOTE, pickStudyFolder, studyFromFiles, studyFromFolder, studyFromUrl, studyFromZip, type OpenStudy } from '../lib/sources';
 import { studyCode, studyFileName } from '../lib/studyFormat';
 import { showCreate } from './create';
 import { alertBox, ask } from './dialog';
@@ -222,9 +222,13 @@ async function showRate(back: () => void) {
     await open(() => studyFromFolder(dir), `Couldn't open “${dir.name}” as a study.`, rateBack);
     folderNote.textContent = '';
   });
+  folderInput.addEventListener('cancel', () => (folderNote.textContent = 'No folder was opened.'));
   folderInput.addEventListener('change', async () => {
     const files = folderInput.files;
-    if (!files?.length) return;
+    if (!files?.length) {
+      folderNote.textContent = NO_FILES_NOTE;
+      return;
+    }
     const { name } = filesEntries(files);
     folderNote.textContent = opening(name);
     await open(() => studyFromFiles(files), `Couldn't open “${name}” as a study.`, rateBack);

@@ -3,6 +3,7 @@ import './styles.css';
 import { startApp } from './ui/app';
 import { showAbout } from './ui/about';
 import { installAdvice } from './lib/safekeeping';
+import { inCrossOriginFrame } from './lib/sources';
 
 declare global {
   const __APP_VERSION__: string;
@@ -69,6 +70,19 @@ hint.querySelector('.banner-close')!.addEventListener('click', () => {
     /* fine: it will show again next time */
   }
 });
+
+// Shown inside another app's view (e.g. VS Code's Simple Browser), NeAR can't create studies or
+// save into folders, and some views never pass on the files a rater chooses: say how to get it all.
+if (inCrossOriginFrame()) {
+  const frameHint = document.createElement('div');
+  frameHint.className = 'banner frame-hint';
+  frameHint.setAttribute('role', 'note');
+  const link = Object.assign(document.createElement('a'), { href: location.href, target: '_blank', rel: 'noopener', textContent: location.href });
+  const text = Object.assign(document.createElement('span'), { className: 'banner-text' });
+  text.append('NeAR is open inside another app, which limits what it can do (no Create a study; folders may not open). For everything, open ', link, ' in Chrome or Edge.');
+  frameHint.append(text);
+  document.querySelector('.appbar')!.after(frameHint);
+}
 
 document.querySelector('#about')!.addEventListener('click', showAbout);
 startApp(document.querySelector<HTMLElement>('#app')!);
