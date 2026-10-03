@@ -2,6 +2,7 @@ import { summarize } from '../lib/csv';
 import { downloadLines, downloadStudyResults, importResults } from '../lib/results';
 import { deleteStudy, legacyResults, listStudies, notDownloaded, readStudyRecord, type Study } from '../lib/studies';
 import { canUseFolders } from '../lib/sources';
+import { installAdvice, storagePersisted } from '../lib/safekeeping';
 import { fileTitle, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask } from './dialog';
 import { backNav, el, page } from './page';
@@ -29,6 +30,18 @@ export function showResults(root: HTMLElement, back: () => void): void {
   const csvInput = el('input', { type: 'file', accept: '.csv,text/csv', hidden: true });
   const importBtn = el('button', { type: 'button', textContent: 'Import results file…' });
   const recoverBtn = el('button', { type: 'button', textContent: 'Recover older results…' });
+
+  // Whether the browser has agreed to keep NeAR's data, and (Safari) why installing NeAR helps.
+  const storage = el('p', { className: 'note storage-status', hidden: true });
+  const advice = installAdvice();
+  void storagePersisted().then((kept) => {
+    const parts: string[] = [];
+    if (kept === true) parts.push('Storage: this browser has agreed to keep NeAR’s results; it won’t clear them to free space.');
+    else if (kept === false) parts.push('Storage: this browser may clear NeAR’s results if space runs low, so save a copy of each study’s results from time to time.');
+    if (advice) parts.push(advice);
+    storage.textContent = parts.join(' ');
+    storage.hidden = !parts.length;
+  });
 
   let studies: Study[] = [];
   void listStudies().then(
@@ -93,6 +106,7 @@ export function showResults(root: HTMLElement, back: () => void): void {
           ? 'Studies opened from a folder keep their results in that folder, in a file named after the study, so they aren’t listed here. Studies opened from a .zip file keep their results in this browser.'
           : 'This browser can’t write to folders, so results are kept here. Download them after your sessions to keep a copy.',
       }),
+      storage,
       table,
       empty,
       el('div', { className: 'row' }, [importBtn, recoverBtn, csvInput]),

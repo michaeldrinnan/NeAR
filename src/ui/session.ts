@@ -1,7 +1,8 @@
-import { buildHeader, buildRow, computeRanks, raterUsed, summarize } from '../lib/csv';
+import { buildHeader, buildRow, computeRanks, raterUsed, serializeLines, summarize } from '../lib/csv';
 import { downloadLines, downloadStudyResults, folderCopy, legacyResultsFile, resultsFor, saveCopy, type ResultsStore } from '../lib/results';
 import { rememberStudy } from '../lib/recent';
-import { studyId } from '../lib/studies';
+import { markDownloaded, studyId } from '../lib/studies';
+import { canShareFile, installAdvice, requestPersistence, shareFile } from '../lib/safekeeping';
 import { audioItems, writeMissingDefinition, type OpenStudy } from '../lib/sources';
 import { ratingOptions, sourceLabel, studyCode, studyFileName } from '../lib/studyFormat';
 import { alertBox, ask, yesNo, yesNoCancel } from './dialog';
@@ -311,6 +312,42 @@ function ratingPage(root: HTMLElement, study: OpenStudy, store: ResultsStore, li
   });
 }
 
+/**
+ * The Save a copy step after a session whose results are kept in this browser: Share… (to Files,
+ * email, AirDrop… where the browser can share files) or Download, or Not now. Escape doesn't
+ * skip it; only Not now does. Resolves true if a copy was saved, which counts as a download.
+ */
+async function saveACopy(id: string, lines: readonly string[], fileName: string): Promise<boolean> {
+  const file = new File([serializeLines(lines)], fileName, { type: 'text/csv' });
+  const share = canShareFile(file);
+  const advice = installAdvice();
+  const body =
+    `Your results are saved, but only in this browser on this device. Save a copy of ${fileName} now, ` +
+    'so they are safe even if the browser’s data is cleared. It holds every session so far.' +
+    (advice ? `\n\n${advice}` : '');
+  for (;;) {
+    const key = await ask(
+      body,
+      [
+        ...(share ? [{ label: 'Share…', value: 'share' as const, primary: true }] : []),
+        { label: 'Download', value: 'download' as const, primary: !share },
+        { label: 'Not now', value: 'skip' as const },
+      ],
+      'Save a copy of your results',
+      'again',
+    );
+    if (key === 'skip') return false;
+    if (key === 'again') continue; // Escape: ask again rather than skip by accident
+    if (key === 'share') {
+      if (!(await shareFile(file, fileName))) continue; // cancelled: back to the choice
+      await markDownloaded(id, lines.length).catch(() => {});
+      return true;
+    }
+    await downloadStudyResults(id, lines, fileName); // exactly what was saved
+    return true;
+  }
+}
+
 /** Saves the results, offering retry / save elsewhere on failure (the old WriteRecentResults). Resolves with what happened. */
 async function writeResults(store: ResultsStore, lines: string[], study: OpenStudy): Promise<string> {
   for (;;) {
@@ -318,15 +355,12 @@ async function writeResults(store: ResultsStore, lines: string[], study: OpenStu
       const committed = await store.commit(lines);
       const time = new Date().toLocaleTimeString();
       if (!store.inBrowser) return `Saved to ${store.where} at ${time}.`;
-      const key = await ask(
-        `Your results have been saved in this browser.\n\nDownload an up-to-date copy of ${store.fileName} now?`,
-        [
-          { label: 'Download', value: 'yes', primary: true },
-          { label: 'Not now', value: 'no' },
-        ],
+      void requestPersistence(); // ask the browser to keep NeAR's storage, now that it holds results
+      const copied = await saveACopy(studyId(study.identity), committed, store.fileName);
+      return (
+        `Saved to this browser at ${time}. ` +
+        (copied ? `A copy of ${store.fileName} was saved too.` : `Save a copy of ${store.fileName} from the Results page at any time.`)
       );
-      if (key === 'yes') downloadStudyResults(studyId(study.identity), committed, store.fileName); // exactly what was saved
-      return `Saved to this browser at ${time}. Download ${store.fileName} from the Results page at any time.`;
     } catch (e) {
       const key = await yesNoCancel(
         `There was a problem writing to:\n  ${store.where}\n\n${(e as Error).message}\n\n` +

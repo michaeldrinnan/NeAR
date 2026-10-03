@@ -67,6 +67,11 @@ study unpacked, for the tests. Regenerate them with `npm run examples`.
 | Results of a study `.zip` | Kept in the browser; download from Results | Kept in the browser; download from Results |
 | Recent studies | Zips and folders (one click to re-grant access) | Zips only |
 
+Results kept in the browser are protected three ways: after each session a *Save a copy* step
+offers Share… (iPad and Mac Safari) or Download; NeAR asks the browser to keep its storage
+permanently; and on Safari it explains that installing NeAR stops Safari clearing its data after
+about 7 days without use.
+
 Only one NeAR session runs at a time across the windows and tabs of a browser; saves to
 browser-kept results commit only if nothing changed them meanwhile, so nothing is ever
 merged or overwritten.

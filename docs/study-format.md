@@ -170,10 +170,22 @@ matches the saved `study.txt`. The buttons:
 - **Results file:** `NeAR_<title>_<code>.csv`, e.g. `NeAR_Dysphonia ranking 2026_3fa9c21b.csv`.
   - In Chrome/Edge, for a study opened from a folder, it is kept **in the study folder**.
   - Otherwise (a `.zip`, a link, an example, or any study in Safari/Firefox) results are kept
-    **in this browser** under the study's identity, and offered for download under that name
-    after each session and on the *Results* page. If a folder picked in Safari/Firefox holds a
-    copy of the study's results file, NeAR uses it (asking which to keep if the browser's
-    copy differs).
+    **in this browser** under the study's identity, and can be downloaded under that name on
+    the *Results* page at any time. If a folder picked in Safari/Firefox holds a copy of the
+    study's results file, NeAR uses it (asking which to keep if the browser's copy differs).
+  - **Keeping browser-kept results safe:**
+    - After each saved session, a **Save a copy of your results** step offers *Share…* (to
+      Files, iCloud Drive, OneDrive, email, AirDrop…, where the browser can share files, e.g.
+      Safari on iPad and Mac) and *Download*. It isn't compulsory, but only *Not now* skips it;
+      Escape doesn't. A share or download counts as downloaded for the warnings on *Remove*
+      and *Delete*.
+    - On the first save NeAR asks the browser to keep its storage permanently
+      (`navigator.storage.persist()`, so it isn't cleared to free space); the *Results* page
+      says whether the browser has agreed.
+    - Safari may clear a website's data after about 7 days without use, but not an installed
+      app's. On Safari (iPad and Mac) NeAR therefore explains how to install it, in a
+      dismissible banner, in the Save a copy step and on the *Results* page; not when it is
+      already installed.
   - If saving fails, *save elsewhere* suggests `NeAR_<title>_<code> (copy).csv`.
   - Names can be read back: they start `NeAR_` and end with `_` and the 8-hex code.
 - **A plain `NeAR.csv`** (from the 2012 version) in the study folder, with the same sample

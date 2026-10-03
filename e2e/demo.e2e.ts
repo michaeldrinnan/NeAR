@@ -80,8 +80,15 @@ test('a demo session with the example study saves the expected ranks', async ({ 
   await expect(page.locator('.drag-avatar')).toHaveCount(0);
 
   await saveAndFinish(page);
+  // Results kept in this browser: a Save a copy step that Escape doesn't skip; only Not now does.
+  const copy = page.locator('dialog');
+  await expect(copy.locator('h2')).toHaveText('Save a copy of your results');
+  await expect(copy).toContainText('only in this browser on this device');
+  await page.keyboard.press('Escape');
+  await expect(copy.locator('h2')).toHaveText('Save a copy of your results');
   await page.getByRole('button', { name: 'Not now' }).click();
   await expect(page.locator('.saved')).toContainText('Saved to this browser');
+  await expect(page.locator('.saved')).toContainText('Save a copy of NeAR_Example files_');
   await expect(page.locator('dialog')).toHaveCount(0); // nothing is "marked": NeAR has no answer key
 
   const lines = (await storedResults(page))['Example files'];
@@ -450,4 +457,82 @@ test('closing the window that holds a session frees it for other windows', async
   await a.close({ runBeforeUnload: false });
   await openExample(b);
   await expect(b.locator('#rater')).toHaveCount(1);
+});
+
+test('Save a copy shares the results file where the browser can, asks for lasting storage, and counts as a download', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { shared: string[]; cancelNext: boolean; persistAsked: boolean };
+    w.shared = [];
+    w.cancelNext = true; // the first share is cancelled, as a rater might
+    Object.defineProperty(navigator, 'canShare', { value: (d: { files?: File[] }) => !!d.files?.length, configurable: true });
+    Object.defineProperty(navigator, 'share', {
+      value: async (d: { files: File[] }) => {
+        if (w.cancelNext) {
+          w.cancelNext = false;
+          throw new DOMException('Cancelled', 'AbortError');
+        }
+        w.shared.push(`${d.files[0].name}|${await d.files[0].text()}`);
+      },
+      configurable: true,
+    });
+    const persist = navigator.storage.persist.bind(navigator.storage);
+    navigator.storage.persist = async () => {
+      w.persistAsked = true;
+      return persist();
+    };
+  });
+  await openExample(page, 1);
+  await name(page, 'Sharer');
+  await saveAndFinish(page);
+  const share = page.getByRole('button', { name: 'Share…' });
+  await expect(share).toHaveClass(/primary/);
+  await share.click(); // cancelled: back to the choice
+  await expect(page.locator('dialog h2')).toHaveText('Save a copy of your results');
+  await share.click();
+  await expect(page.locator('.saved')).toContainText('A copy of NeAR_Example_ no references_');
+  const shared = await page.evaluate(() => (window as unknown as { shared: string[] }).shared);
+  expect(shared).toHaveLength(1);
+  const [fileName, text] = shared[0].split('|');
+  expect(fileName).toMatch(/^NeAR_Example_ no references_[0-9a-f]{8}\.csv$/);
+  expect(text).toBe((await storedResults(page))['Example: no references'].map((l) => l + '\r\n').join(''));
+  expect(await page.evaluate(() => (window as unknown as { persistAsked: boolean }).persistAsked)).toBe(true);
+
+  // Shared counts as downloaded, so Remove has nothing to warn about.
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.locator('.list .item').getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('dialog')).not.toContainText('WARNING');
+  await page.getByRole('button', { name: 'Keep it' }).click();
+
+  // The Results page says whether the browser keeps NeAR's storage.
+  await page.getByRole('button', { name: '← Back' }).click();
+  await page.getByRole('button', { name: /^Results/ }).click();
+  await expect(page.locator('.storage-status')).toContainText(/^Storage: this browser (has agreed to keep|may clear) NeAR’s results/);
+});
+
+test.describe('on an iPad (Safari)', () => {
+  test.use({
+    userAgent:
+      'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+
+  test('installing NeAR is explained where results are kept: the banner, Save a copy, and Results', async ({ page }) => {
+    await page.goto('/');
+    const banner = page.locator('#install-hint');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Safari may clear a website’s data after about 7 days without use, but an installed app keeps its data');
+    await expect(banner).toContainText('tap Share, then “Add to Home Screen”');
+    await openExample(page, 1);
+    await name(page, 'Tablet');
+    await saveAndFinish(page);
+    await expect(page.locator('dialog')).toContainText('an installed app keeps its data');
+    await page.getByRole('button', { name: 'Not now' }).click();
+    await page.getByRole('button', { name: '← Back' }).click();
+    await page.getByRole('button', { name: '← Back' }).click();
+    await page.getByRole('button', { name: /^Results/ }).click();
+    await expect(page.locator('.storage-status')).toContainText('an installed app keeps its data');
+    // Dismissed, the banner stays away.
+    await banner.getByRole('button', { name: 'Dismiss' }).click();
+    await page.reload();
+    await expect(banner).toBeHidden();
+  });
 });

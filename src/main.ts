@@ -2,6 +2,7 @@ import { registerSW } from 'virtual:pwa-register';
 import './styles.css';
 import { startApp } from './ui/app';
 import { showAbout } from './ui/about';
+import { installAdvice } from './lib/safekeeping';
 
 declare global {
   const __APP_VERSION__: string;
@@ -44,25 +45,19 @@ window.addEventListener('appinstalled', () => {
   installPrompt = null;
 });
 
-// Safari has no install prompt, so explain the manual route instead.
-const HINT_KEY = 'near.installHintDismissed';
+// Safari has no install prompt, so explain the manual route instead, and why it matters there:
+// Safari may clear a website's data (including results kept in the browser) after about 7 days
+// without use, but not an installed app's. The Results page and Save a copy step repeat it.
+const HINT_KEY = 'near.installHintDismissed.v2';
 const hint = document.querySelector<HTMLElement>('#install-hint')!;
-const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone;
-const ua = navigator.userAgent;
-const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const isMacSafari = !isIOS && /Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(ua);
-const hintText = isIOS
-  ? 'To install NeAR as an app, tap Share, then “Add to Home Screen”.'
-  : isMacSafari
-    ? 'To install NeAR as an app, choose File › Add to Dock.'
-    : '';
+const hintText = installAdvice() ?? '';
 let dismissed = false;
 try {
   dismissed = localStorage.getItem(HINT_KEY) === '1';
 } catch {
   /* storage unavailable: show the hint */
 }
-if (hintText && !standalone && !dismissed) {
+if (hintText && !dismissed) {
   hint.querySelector('.banner-text')!.textContent = hintText;
   hint.hidden = false;
 }
