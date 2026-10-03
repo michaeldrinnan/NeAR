@@ -33,7 +33,7 @@ export function go(name: PageName): void {
   const home = () => go('home');
   if (name === 'home') showHome();
   else if (name === 'newto') showNewTo(home);
-  else if (name === 'create') showCreate(root, home, (study) => rateStudy(root, study, () => go('create'), false));
+  else if (name === 'create') showCreate(root, home, (study) => rateStudy(root, study, () => go('create'), false, '', true));
   else if (name === 'rate') void showRate(home);
   else showResults(root, home);
 }

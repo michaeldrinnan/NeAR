@@ -54,7 +54,7 @@ export function runRating(
   root: HTMLElement,
   samples: readonly AudioItem[],
   refs: readonly AudioItem[] | null,
-  opts: StudyOptions & { instructions: readonly string[]; onBack(): void; onInfo(): void },
+  opts: StudyOptions & { instructions: readonly string[]; finishLabel?: string; onBack(): void; onInfo(): void },
   beforeFinish: () => Promise<boolean> = async () => true,
 ): RatingSession {
   root.innerHTML = `
@@ -63,7 +63,7 @@ export function runRating(
         <button type="button" class="back">← Back</button>
         <button type="button" class="info">Study info</button>
         <audio controls preload="auto" aria-label="Player"></audio>
-        <button type="button" class="primary finish">Save and finish</button>
+        <button type="button" class="primary finish"></button>
       </div>
       <div class="instr rating-instr"></div>
       <p class="prompt">Put the BEST sample here at top left.${refs ? " Reference samples are plain blue and cannot be moved." : ""}</p>
@@ -80,6 +80,7 @@ export function runRating(
   const ratedBox = root.querySelector<HTMLElement>('.rated')!;
   const unratedBox = root.querySelector<HTMLElement>('.unrated')!;
   const finishBtn = root.querySelector<HTMLButtonElement>('.finish')!;
+  finishBtn.textContent = opts.finishLabel ?? 'Save and finish';
   const audio = root.querySelector('audio')!;
 
   const urls = new Map<string, string>();

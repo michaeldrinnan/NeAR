@@ -136,6 +136,10 @@ export async function mockFolders(page: Page, folders: Record<string, Record<str
         }
         return fileHandle(root, p);
       },
+      async removeEntry(name: string) {
+        if (!(prefix + name in w.folders[root])) throw new DOMException('Missing', 'NotFoundError');
+        delete w.folders[root][prefix + name];
+      },
       queryPermission: async () => 'granted',
       requestPermission: async () => 'granted',
       isSameEntry: async () => false,

@@ -52,7 +52,7 @@ suggesting WAV, MP3 or M4A instead. Results columns use the full file names, ext
 **A folder without `study.txt`** opens anywhere a folder can be opened and runs with the
 defaults: the title is the folder's name and there are no instructions. In Chrome/Edge, once
 the first session's results have been saved into the folder, NeAR also writes a `study.txt`
-there with exactly those settings (laid out as *Save* on the Create page writes it), so the
+there with exactly those settings (laid out as the Create page writes it), so the
 folder keeps its title and options even if it is renamed later. This needs no extra
 permission, and if the folder can't be written to NeAR carries on without it. The study code
 is the same before and after, because it is computed from the effective definition, not the
@@ -157,13 +157,24 @@ every browser. If the folder picker still fails in a capable browser, the page s
 2. **Options** — each one On or Off.
 3. **Title and instructions.**
 
-The page shows the **study code** as it stands, the results file it goes with, and whether it
-matches the saved `study.txt`. The buttons:
+The page shows the **study code** as it stands and the results file it goes with.
 
-- **Save** — writes `study.txt` into the folder.
-- **Save as zip…** — downloads the whole study as `NeAR_<title>_<code>.zip` (`study.txt`,
+**Changes are saved as you go**, to `study.txt` in the folder: an option as soon as it is
+clicked, the title and instructions a moment after typing stops (or on leaving the box). A
+title that breaks the rules above isn't saved until it is corrected. A folder without
+`study.txt` gets one with the defaults as soon as it is chosen (as does *Start from the
+defaults* after a mistake in the file). A line under the buttons confirms each save.
+
+- **Changing a study that already has sessions** (its results file for the current code holds
+  any) asks first, once: *This study has N sessions saved. Changing it makes a new version with
+  its own results file…* with *Change it* or *Cancel*. Cancel leaves everything as it was.
+- **Undo all changes** puts `study.txt` back exactly as it was when the folder was chosen
+  (comments and all), or removes it if there wasn't one, and resets the page to match.
+- **Try without saving results** opens the study as it stands on the Study info screen (session
+  name *Try-out*) and rating screen. Nothing is read or written: no results file, no browser
+  results, no Recent studies entry. *Finish try-out* ends it, and Back returns to the page.
+- **Save as zip…** downloads the whole study as `NeAR_<title>_<code>.zip` (`study.txt`,
   `Test/`, `Ref/`), to email, put on a web server, or open with *Open study file…*.
-- **Try it now** — opens the study as it stands on the rating screen; Back returns to the page.
 
 **Editing** a study means choosing its folder again: its settings are read from `study.txt`.
 

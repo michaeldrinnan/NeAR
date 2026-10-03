@@ -24,22 +24,30 @@ const STUDY = {
   'notes.docx': 'notes',
 };
 
-test('Create: only the folder step is available until a folder is chosen; then what was found is shown', async ({ page }) => {
+const TRY = 'Try without saving results';
+const codeOf = async (page: Page) => {
+  await expect(page.locator('.code-line')).toContainText(/#[0-9a-f]{8}/);
+  return (await page.locator('.code-line').textContent())!.match(/#([0-9a-f]{8})/)![1];
+};
+
+test('Create: only the folder step is available until a folder is chosen; then what was found is shown and saved', async ({ page }) => {
   await mockFolders(page, { 'Dysphonia 2026': STUDY });
   await toCreate(page);
   await expect(page.locator('.step.needs')).toHaveCount(2);
-  for (const b of ['Save', 'Save as zip…', 'Try it now']) await expect(page.getByRole('button', { name: b, exact: true })).toBeDisabled();
+  for (const b of ['Save as zip…', TRY, 'Undo all changes']) await expect(page.getByRole('button', { name: b, exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0); // saved as you go
   await expect(page.locator('.status')).toHaveText('Choose a study folder to continue.');
+  await expect(page.getByText('Every option is fixed')).toHaveCount(0);
 
   await chooseFolder(page, 'Dysphonia 2026');
   const found = page.locator('.found');
   await expect(found).toContainText('3 voices to rate in Test');
   await expect(found).toContainText('1 reference voice in Ref');
-  await expect(found).toContainText('No study.txt yet, so NeAR starts from the defaults');
+  await expect(found).toContainText('No study.txt yet, so NeAR starts from the defaults and saves them there');
   await expect(found).toContainText('1 other file or folder ignored');
   await expect(page.locator('.step.needs')).toHaveCount(0);
 
-  // The defaults, and the folder's name as the title.
+  // The defaults, and the folder's name as the title, written to study.txt straight away.
   const pressed = (key: string) => page.locator(`[data-option="${key}"] [aria-pressed="true"]`);
   await expect(pressed('random')).toHaveText('On');
   await expect(pressed('numbers')).toHaveText('On');
@@ -47,88 +55,129 @@ test('Create: only the folder step is available until a folder is chosen; then w
   await expect(pressed('leave_unrated')).toHaveText('Off');
   await expect(pressed('play_count')).toHaveText('Off');
   await expect(page.locator('#study-title')).toHaveValue('Dysphonia 2026');
-  await expect(page.locator('.code-line')).toContainText(/Study code #[0-9a-f]{8}\. Results go to NeAR_Dysphonia 2026_[0-9a-f]{8}\.csv\. Not saved yet/);
+  await expect(page.locator('.code-line')).toHaveText(/^Study code #[0-9a-f]{8}\. Results go to NeAR_Dysphonia 2026_[0-9a-f]{8}\.csv\.$/);
+  await expect(page.locator('.status')).toHaveText(/^Saved to study\.txt in “Dysphonia 2026” · study code #[0-9a-f]{8}\.$/);
+  expect((await folderFiles(page, 'Dysphonia 2026'))['study.txt']).toContain('title         = Dysphonia 2026');
+  const code = await codeOf(page);
 
-  // The folder runs as it is, with the defaults: the same study (same code, same results file) as after saving them.
-  const code = (await page.locator('.code-line').textContent())!.match(/#([0-9a-f]{8})/)![1];
-  await page.getByRole('button', { name: 'Try it now' }).click();
-  await expect(page.locator('.meta')).toContainText(`study #${code}`);
-  await page.getByRole('button', { name: '← Back' }).click();
+  // The same study (same code) when opened to rate.
   await page.getByRole('button', { name: '← Back' }).click();
   await page.getByRole('button', { name: /Rate a study/ }).click();
   await page.getByRole('button', { name: 'Open study folder…' }).click();
   await expect(page.locator('.study-title')).toHaveText('Dysphonia 2026');
   await expect(page.locator('.instr')).toBeHidden();
   await expect(page.locator('.meta')).toContainText(`study #${code}`);
-  await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: /Create a study/ }).click();
-  await chooseFolder(page, 'Dysphonia 2026');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.locator('.code-line')).toContainText(`Study code #${code}`);
-  await expect(page.locator('.code-line')).toContainText('Saved in study.txt.');
 });
 
-test('Create: titles that can’t be used in file names are refused with a note', async ({ page }) => {
+test('Create: titles that can’t be used in file names are refused with a note, and not saved', async ({ page }) => {
   await mockFolders(page, { Voices: STUDY });
   await toCreate(page);
   await chooseFolder(page, 'Voices');
+  await expect(page.locator('.status')).toContainText('Saved to study.txt');
   const title = page.locator('#study-title');
   await title.fill('Before/after');
   await expect(page.locator('.field-note')).toContainText('can’t contain');
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await expect(page.locator('.field-note')).toContainText('Not saved until it is corrected.');
+  await expect(page.getByRole('button', { name: TRY })).toBeDisabled();
+  await title.blur();
+  await page.waitForTimeout(900);
+  expect((await folderFiles(page, 'Voices'))['study.txt']).toContain('title         = Voices');
   await title.fill('x'.repeat(81));
   await expect(page.locator('.field-note')).toContainText('80 characters');
   await title.fill('Before and after.');
   await expect(page.locator('.field-note')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
   await expect(page.locator('.code-line')).toContainText('NeAR_Before and after_'); // trailing full stop dropped
+  await expect.poll(async () => (await folderFiles(page, 'Voices'))['study.txt']).toContain('title         = Before and after');
 });
 
-test('Create: Save writes study.txt; choosing the folder again edits it; any change gives a new code', async ({ page }) => {
-  await mockFolders(page, { Voices: STUDY });
+test('Create: changes are saved as you go; choosing the folder again edits it; Undo puts study.txt back', async ({ page }) => {
+  const original = '# my notes\ntitle = Dysphonia ranking\ninstructions = Rank by severity.\nnumbers = off\n';
+  await mockFolders(page, { Voices: { ...STUDY, 'study.txt': original }, Fresh: STUDY });
   await toCreate(page);
-  await chooseFolder(page, 'Voices');
-  await page.locator('[data-option="numbers"]').getByRole('button', { name: 'Off' }).click();
-  await page.locator('#study-title').fill('Dysphonia ranking');
-  await page.locator('#study-instructions').fill('Rank by severity.\nLeast severe at top left.');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.locator('.status')).toHaveText(/^Saved study\.txt in “Voices”\. Study code #[0-9a-f]{8}\.$/);
-  await expect(page.locator('.code-line')).toContainText('Saved in study.txt.');
-  const code = (await page.locator('.code-line').textContent())!.match(/#([0-9a-f]{8})/)![1];
-  const text = (await folderFiles(page, 'Voices'))['study.txt'];
-  expect(text).toContain('title         = Dysphonia ranking');
-  expect(text).toContain('instructions  = Least severe at top left.');
-  expect(text).toContain('numbers       = off');
-  expect(text).not.toContain('version');
-
-  // Edit: back to Home, then choose the folder again; its settings are read from study.txt.
-  await page.getByRole('button', { name: '← Back' }).click();
-  await page.getByRole('button', { name: /Create a study/ }).click();
   await chooseFolder(page, 'Voices');
   await expect(page.locator('.found')).toContainText('Settings read from study.txt.');
   await expect(page.locator('#study-title')).toHaveValue('Dysphonia ranking');
   await expect(page.locator('[data-option="numbers"] [aria-pressed="true"]')).toHaveText('Off');
-  await expect(page.locator('.code-line')).toContainText(`#${code}`);
-  await expect(page.locator('.code-line')).toContainText('Saved in study.txt.');
+  const code = await codeOf(page);
+  await expect(page.getByRole('button', { name: 'Undo all changes' })).toBeDisabled(); // nothing changed yet
+  expect((await folderFiles(page, 'Voices'))['study.txt']).toBe(original); // opening it writes nothing
+
+  // An option is saved at once; text a moment after typing stops. Each change gives a new code.
   await page.locator('[data-option="play_count"]').getByRole('button', { name: 'On' }).click();
-  await expect(page.locator('.code-line')).toContainText('Changed since study.txt was saved');
+  await expect(page.locator('.status')).toContainText('Saved to study.txt in “Voices”');
   await expect(page.locator('.code-line')).not.toContainText(`#${code}`);
+  expect((await folderFiles(page, 'Voices'))['study.txt']).toContain('play_count    = on');
+  await page.locator('#study-instructions').fill('Rank by severity.\nLeast severe at top left.');
+  await expect.poll(async () => (await folderFiles(page, 'Voices'))['study.txt']).toContain('instructions  = Least severe at top left.');
+
+  // Undo all changes: study.txt is exactly as it was, comments and all, and so is the page.
+  await page.getByRole('button', { name: 'Undo all changes' }).click();
+  await expect(page.locator('.status')).toHaveText('Undone: study.txt is back as it was when you chose the folder.');
+  expect((await folderFiles(page, 'Voices'))['study.txt']).toBe(original);
+  await expect(page.locator('#study-instructions')).toHaveValue('Rank by severity.');
+  await expect(page.locator('[data-option="play_count"] [aria-pressed="true"]')).toHaveText('Off');
+  await expect(page.locator('.code-line')).toContainText(`#${code}`);
+  await expect(page.getByRole('button', { name: 'Undo all changes' })).toBeDisabled();
+
+  // A folder that had no study.txt: Undo removes the one NeAR wrote.
+  await chooseFolder(page, 'Fresh');
+  await expect(page.locator('.status')).toContainText('Saved to study.txt');
+  await page.getByRole('button', { name: 'Undo all changes' }).click();
+  expect((await folderFiles(page, 'Fresh'))['study.txt']).toBeUndefined();
 });
 
-test('Create: Save as zip makes a study that opens with the same code; Try it now comes back to the page', async ({ page }) => {
+test('Create: changing a study that already has sessions asks first; Cancel changes nothing', async ({ page }) => {
+  const text = 'title = Used\n';
+  await mockFolders(page, { Used: { ...STUDY, 'study.txt': text } });
+  await toCreate(page);
+  await chooseFolder(page, 'Used');
+  const code = await codeOf(page);
+  // Give the study as it stands two saved sessions, then choose the folder again.
+  await page.evaluate((c) => {
+    const w = window as unknown as { folders: Record<string, Record<string, string>> };
+    w.folders.Used[`NeAR_Used_${c}.csv`] = 'RATER,DATE,TIME,SOURCE,REFERENCE,NREFS,v1.wav,v2.wav,v3.wav\r\nA,2026-10-01,10:00:00,x,Ref,1,2,3,4\r\nB,2026-10-02,10:00:00,x,Ref,1,4,3,2\r\n';
+  }, code);
+  await chooseFolder(page, 'Used');
+  await page.locator('[data-option="names"]').getByRole('button', { name: 'On' }).click();
+  const dialog = page.locator('dialog');
+  await expect(dialog).toContainText('This study has 2 sessions saved. Changing it makes a new version with its own results file');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('[data-option="names"] [aria-pressed="true"]')).toHaveText('Off');
+  await page.locator('#study-title').pressSequentially('X');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('#study-title')).toHaveValue('Used');
+  expect((await folderFiles(page, 'Used'))['study.txt']).toBe(text);
+  // Agreeing once lets every later change through without asking again.
+  await page.locator('[data-option="names"]').getByRole('button', { name: 'On' }).click();
+  await page.getByRole('button', { name: 'Change it' }).click();
+  await expect(page.locator('.status')).toContainText('Saved to study.txt');
+  await page.locator('[data-option="numbers"]').getByRole('button', { name: 'Off' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(async () => (await folderFiles(page, 'Used'))['study.txt']).toContain('numbers       = off');
+});
+
+test('Create: Try without saving results writes nothing and comes back to the page; Save as zip opens with the same code', async ({ page }) => {
   await mockFolders(page, { Voices: STUDY });
   await toCreate(page);
   await chooseFolder(page, 'Voices');
   await page.locator('#study-title').fill('Zipped');
   await page.locator('#study-instructions').fill('Listen carefully.');
   await expect(page.locator('.code-line')).toContainText('NeAR_Zipped_');
-  const code = (await page.locator('.code-line').textContent())!.match(/#([0-9a-f]{8})/)![1];
+  await expect.poll(async () => (await folderFiles(page, 'Voices'))['study.txt']).toContain('Listen carefully.');
+  const code = await codeOf(page);
 
-  // Try it now: the rating screen for exactly this design, and Back returns to the page as it was.
-  await page.getByRole('button', { name: 'Try it now' }).click();
+  // A try-out: the rating screen for exactly this design; finishing saves nothing anywhere.
+  await page.getByRole('button', { name: TRY }).click();
   await expect(page.locator('.study-title')).toHaveText('Zipped');
   await expect(page.locator('.meta')).toHaveText(`3 voices · 1 reference · study #${code}`);
+  await expect(page.locator('.results-note')).toHaveText('This is a try-out: nothing will be saved.');
+  await expect(page.locator('#rater')).toHaveValue('Try-out');
+  await page.getByRole('button', { name: 'Start rating' }).click();
+  await page.getByRole('button', { name: 'Finish try-out' }).click({ modifiers: ['Control'] });
+  await page.getByRole('button', { name: 'Yes', exact: true }).click();
+  await expect(page.locator('.saved')).toHaveText('Try-out finished. Nothing was saved.');
+  expect(Object.keys(await folderFiles(page, 'Voices')).filter((f) => f.startsWith('NeAR'))).toEqual([]);
+  expect(await storedResults(page)).toEqual({});
   await page.getByRole('button', { name: '← Back' }).click();
   await expect(page.locator('#study-title')).toHaveValue('Zipped');
 
@@ -165,25 +214,30 @@ test('Create: folders that can’t be studies keep the page locked with a plain 
   await expect(problem).toContainText('Only one voice to rate was found in Test');
   await chooseFolder(page, 'Broken');
   await expect(problem).toContainText('“b.wav” in Test can’t be played in this browser');
-  await expect(page.getByRole('button', { name: 'Try it now' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: TRY })).toBeDisabled();
   await chooseFolder(page, 'Mislabelled'); // any case, any accepted type
   await expect(problem).toContainText('“b.mp3” in Test can’t be played in this browser');
   await chooseFolder(page, 'Patchy');
   await expect(problem).toContainText('Ogg and Opus files don’t play in some browsers');
+  for (const f of ['Empty', 'One', 'Broken', 'Mislabelled', 'Patchy']) expect((await folderFiles(page, f))['study.txt']).toBeUndefined(); // nothing written to unusable folders
 
-  // A mistake in study.txt names the line, and offers the defaults instead.
+  // A mistake in study.txt names the line, and offers the defaults instead (saved at once; Undo puts the file back).
   await chooseFolder(page, 'Mistake');
   await expect(problem).toContainText('line 2: “random = maybe” should be on or off');
   await expect(page.locator('.step.needs')).toHaveCount(2);
   await page.getByRole('button', { name: 'Start from the defaults' }).click();
   await expect(page.locator('.step.needs')).toHaveCount(0);
   await expect(page.locator('#study-title')).toHaveValue('Mistake');
+  await expect.poll(async () => (await folderFiles(page, 'Mistake'))['study.txt']).toContain('random        = on');
+  await page.getByRole('button', { name: 'Undo all changes' }).click();
+  expect((await folderFiles(page, 'Mistake'))['study.txt']).toBe('title = T\nrandom = maybe\n');
+  await expect(problem).toContainText('line 2');
 
   // 2012 style: audio files loose in the folder are the voices to rate, with no references.
   await chooseFolder(page, 'Old');
   await expect(page.locator('.found')).toContainText('2 voices to rate, loose in the folder (2012 style)');
   await expect(page.locator('.found')).toContainText('No Ref folder, so there are no references');
-  await expect(page.getByRole('button', { name: 'Try it now' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: TRY })).toBeEnabled();
 });
 
 test('without folder access (Safari, Firefox, iPad), Create a study is unavailable, with the reason; rating still works', async ({ page }) => {
