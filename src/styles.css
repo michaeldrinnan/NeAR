@@ -288,16 +288,23 @@ th { border-top: 0; font-size: 0.85rem; color: var(--muted); font-weight: 400; }
 .check input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
 
 /* ---- dialogs ---- */
+/* Dialogs: a lighter slate card with a clear edge, so they stand out from the near-black page. */
 .modal {
   max-width: min(560px, calc(100vw - 32px));
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-top: 4px solid var(--results);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
+  padding: 22px;
+  border: 1px solid #6a7894;
+  border-top: 5px solid var(--results);
+  border-radius: 10px;
+  background: #2a3242;
+  color: #f2f4f7;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4), 0 18px 50px rgb(0 0 0 / 0.7);
 }
-.modal::backdrop { background: rgb(0 0 0 / 0.65); }
+.modal::backdrop { background: rgb(5 8 14 / 0.55); backdrop-filter: blur(3px); }
+.modal button:not(.primary):not(.danger) { background: #3a4458; border-color: #6a7894; }
+.modal button:not(.primary):not(.danger):hover { background: #465169; }
+.modal button.danger { background: #3b1a1f; border-color: #c05656; color: #ffc9c9; }
+.modal .note, .modal .muted, .modal .small, .modal .about dt { color: #c3cad6; }
+.modal .instr { background: #1d2330; }
 .modal h2 { margin: 0 0 10px; font-size: 1.1rem; }
 .modal-body { white-space: pre-line; }
 .study-form { display: grid; gap: 12px; white-space: normal; }
