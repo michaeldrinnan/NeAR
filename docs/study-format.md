@@ -166,7 +166,8 @@ The buttons:
   Saving a change to a study that already has sessions asks first: *This study has N sessions
   saved. Saving these changes makes a new version with its own results file…*, with *Save as a
   new version* or *Cancel*.
-- **Back** leaves without saving. If there are unsaved changes it asks first (*Leave without
+- **Back** leaves without saving, and choosing another folder drops unsaved edits too. If there
+  are unsaved changes, both ask first (*Leave without
   saving?*, with *Keep editing* as the default); what was saved stays saved.
 - **Undo all changes** goes back to how the folder was when it was chosen: `study.txt` exactly
   as it was (comments and all), or no `study.txt` if there wasn't one, with the page to match.

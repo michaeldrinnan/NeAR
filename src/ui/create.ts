@@ -79,6 +79,19 @@ export function showCreate(root: HTMLElement, back: () => void, tryStudy: (study
   const pick = el('button', { type: 'button', className: 'primary', textContent: 'Choose study folder…' });
   const pickNote = el('p', { className: 'note pick-note', 'aria-live': 'polite' });
   pick.addEventListener('click', async () => {
+    // Choosing another folder drops unsaved edits to this one, so ask first.
+    if (chosen?.edited) {
+      const key = await ask(
+        `Your changes to “${chosen.name}” haven’t been saved. If you choose another folder now, they will be lost.`,
+        [
+          { label: 'Keep editing', value: 'keep' as const, primary: true },
+          { label: 'Discard changes and choose another', value: 'discard' as const, danger: true },
+        ],
+        'Choose another folder?',
+        'keep',
+      );
+      if (key !== 'discard') return;
+    }
     let dir: FileSystemDirectoryHandle | null;
     pickNote.textContent = '';
     try {

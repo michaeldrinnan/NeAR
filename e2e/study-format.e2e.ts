@@ -146,6 +146,27 @@ test('Create: Save writes study.txt; Back leaves without saving (asking first); 
   expect((await folderFiles(page, 'Fresh'))['study.txt']).toBeUndefined();
 });
 
+test('Create: choosing another folder with unsaved changes asks first', async ({ page }) => {
+  await mockFolders(page, { First: { ...STUDY, 'study.txt': 'title = First\n' }, Second: STUDY });
+  await toCreate(page);
+  await chooseFolder(page, 'First');
+  await page.locator('#study-title').fill('First, edited');
+  await chooseFolder(page, 'Second');
+  const dialog = page.locator('dialog');
+  await expect(dialog.locator('h2')).toHaveText('Choose another folder?');
+  await expect(dialog).toContainText('Your changes to “First” haven’t been saved');
+  await page.keyboard.press('Escape'); // keeps editing
+  await expect(page.locator('#study-title')).toHaveValue('First, edited');
+  await chooseFolder(page, 'Second');
+  await page.getByRole('button', { name: 'Discard changes and choose another' }).click();
+  await expect(page.locator('#study-title')).toHaveValue('Second');
+  expect((await folderFiles(page, 'First'))['study.txt']).toBe('title = First\n');
+  // With nothing unsaved, it just changes folder.
+  await chooseFolder(page, 'First');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('#study-title')).toHaveValue('First');
+});
+
 test('Create: saving a change to a study that already has sessions asks first; Cancel saves nothing', async ({ page }) => {
   const text = 'title = Used\n';
   await mockFolders(page, { Used: { ...STUDY, 'study.txt': text } });
